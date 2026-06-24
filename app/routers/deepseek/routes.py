@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "deepseek-api"))
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
 from app.schemas import ChatCompletionRequest, ChatCompletionResponse
@@ -140,7 +140,19 @@ async def list_models():
     response_model=ChatCompletionResponse,
     response_model_exclude_none=True,
 )
-async def chat_completions(body: ChatCompletionRequest):
+async def chat_completions(
+    body: ChatCompletionRequest = Body(
+        openapi_examples={
+            "basic": {
+                "summary": "Basic chat",
+                "value": {
+                    "model": "deepseek-v3",
+                    "messages": [{"role": "user", "content": "Hello!"}],
+                },
+            }
+        }
+    )
+):
     messages = body.messages
     stream = body.stream
     model = body.model or "deepseek-v3"

@@ -2,7 +2,7 @@ import json
 import time
 from typing import AsyncGenerator
 
-from fastapi import Request
+from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from gemini_webapi import GeminiClient
 
@@ -17,7 +17,20 @@ from app.schemas import ChatCompletionRequest, ChatCompletionResponse
     response_model=ChatCompletionResponse,
     response_model_exclude_none=True,
 )
-async def chat_completions(request: Request, body: ChatCompletionRequest):
+async def chat_completions(
+    request: Request,
+    body: ChatCompletionRequest = Body(
+        openapi_examples={
+            "basic": {
+                "summary": "Basic chat",
+                "value": {
+                    "model": "gemini-3-flash",
+                    "messages": [{"role": "user", "content": "Hello!"}],
+                },
+            }
+        }
+    )
+):
     client = _require_client(request)
     if isinstance(client, JSONResponse):
         return client

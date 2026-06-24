@@ -3,7 +3,7 @@ import json
 import time
 from typing import AsyncGenerator
 
-from fastapi import Request
+from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from notebooklm import NotebookLMClient
 from notebooklm.types import ChatGoal, ChatMode, ChatResponseLength
@@ -28,7 +28,20 @@ from .helpers import _require_client
     response_model=ChatCompletionResponse,
     response_model_exclude_none=True,
 )
-async def chat_completions(request: Request, body: ChatCompletionRequest):
+async def chat_completions(
+    request: Request,
+    body: ChatCompletionRequest = Body(
+        openapi_examples={
+            "basic": {
+                "summary": "Basic chat",
+                "value": {
+                    "model": "notebooklm-2-0",
+                    "messages": [{"role": "user", "content": "Summarize the sources"}],
+                },
+            }
+        }
+    )
+):
     try:
         client = await _require_client(request)
     except ValueError as e:

@@ -33,7 +33,7 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta 
 
 | Provider | Credentials Guide | Specific Endpoints |
 |---|---|---|
-| DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | [search_enabled, expert models, reasoning_content](docs/deepseek.md#chat-completions--additional-fields) |
+| DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | [expert models, reasoning_content](docs/deepseek.md#chat-completions--additional-fields) |
 | Gemini | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
 | NotebookLM | [`docs/notebooklm.md`](docs/notebooklm.md) | [Notebooks, Sources, Notes, Chat, Research, Sharing, Settings, Mind Maps](docs/notebooklm.md) · [Artifacts (~32)](docs/notebooklm-artifacts.md) |
 | Meta AI | [`docs/metaai.md`](docs/metaai.md) | [Image Gen, Video Gen, Image Upload, Video Extend, Media](docs/metaai.md#provider-specific-endpoints) |
@@ -52,14 +52,14 @@ cp .env.example .env
 | `GEMINI_SECURE_1PSID` | ✅ | Google `__Secure-1PSID` cookie — [docs](docs/gemini.md) |
 | `GEMINI_SECURE_1PSIDTS` | ❌ | Google `__Secure-1PSIDTS` cookie — [docs](docs/gemini.md) |
 | `NOTEBOOKLM_STORAGE_PATH` | ❌* | Path to `storage_state.json` — [docs](docs/notebooklm.md) |
-| `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` | ❌ | Default notebook for chat completions |
+| `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` | ❌* | Notebook ID for chat completions — [docs](docs/notebooklm.md) |
 | `META_AI_DATR` | ✅ | Meta AI `datr` cookie — [docs](docs/metaai.md) |
 | `META_AI_ECTO_1_SESS` | ❌ | Meta AI `ecto_1_sess` cookie — [docs](docs/metaai.md) |
 | `META_AI_ABRA_SESS` | ❌ | Meta AI `abra_sess` cookie — [docs](docs/metaai.md) |
 | `GROK_SSO` | ✅ | Grok `sso` cookie — [docs](docs/grok.md) |
 | `GROK_SSO_RW` | ✅ | Grok `sso-rw` cookie — [docs](docs/grok.md) |
 
-\*Required for NotebookLM endpoints.
+\*Required for NotebookLM endpoints. `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` required for chat completions.
 
 ## Run
 
@@ -123,16 +123,6 @@ data: {"choices": [{"delta": {"content": "..."}}]}
 data: [DONE]
 ```
 
-### Provider-specific request fields
-
-| Provider | Field | Type | Description |
-|---|---|---|---|
-| Gemini | `files` | array | File paths to attach |
-| NotebookLM | `notebook_id` | string | Target notebook |
-| NotebookLM | `source_ids` | array | Filter to specific sources |
-
-See each provider doc for details. Meta AI also has [image generation](docs/metaai.md) and [video generation](docs/metaai.md) endpoints.
-
 ## System
 
 | Endpoint | Method | Description |
@@ -142,20 +132,33 @@ See each provider doc for details. Meta AI also has [image generation](docs/meta
 
 ## Examples
 
-### Basic chat
+All providers share the same request format — only the endpoint and model differ.
 
 ```bash
+# DeepSeek
 curl -s http://localhost:8000/v1/deepseek/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "deepseek-v3", "messages": [{"role": "user", "content": "Hello!"}]}'
-```
 
-### Streaming
-
-```bash
-curl -s -N http://localhost:8000/v1/deepseek/chat/completions \
+# Gemini
+curl -s http://localhost:8000/v1/gemini/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "deepseek-v3", "messages": [{"role": "user", "content": "Count to 5"}], "stream": true}'
+  -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# Grok
+curl -s http://localhost:8000/v1/grok/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "grok-3", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# Meta AI
+curl -s http://localhost:8000/v1/metaai/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "llama-4", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# NotebookLM
+curl -s http://localhost:8000/v1/notebooklm/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "notebooklm-2-0", "messages": [{"role": "user", "content": "Summarize the sources"}]}'
 ```
 
-> For provider-specific endpoints (gems, research, notebooks, sources), see the respective doc.
+> For provider-specific endpoints (gems, research, notebooks, sources, image/video gen), see the respective doc.

@@ -5,7 +5,7 @@ import time
 import asyncio
 from typing import AsyncGenerator
 
-from fastapi import Request
+from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from metaai_api import MetaAI
 
@@ -20,7 +20,20 @@ from app.schemas import ChatCompletionRequest, ChatCompletionResponse
     response_model=ChatCompletionResponse,
     response_model_exclude_none=True,
 )
-async def chat_completions(request: Request, body: ChatCompletionRequest):
+async def chat_completions(
+    request: Request,
+    body: ChatCompletionRequest = Body(
+        openapi_examples={
+            "basic": {
+                "summary": "Basic chat",
+                "value": {
+                    "model": "llama-4",
+                    "messages": [{"role": "user", "content": "Hello!"}],
+                },
+            }
+        }
+    )
+):
     client = get_client(request)
     if not client:
         return JSONResponse(
