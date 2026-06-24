@@ -29,6 +29,7 @@
 | `/v1/gemini/chats` | GET | List chat sessions |
 | `/v1/gemini/chats/{cid}` | GET | Get chat history |
 | `/v1/gemini/chats/{cid}` | DELETE | Delete chat session |
+| `/v1/gemini/chats/{cid}/latest-response` | GET | Get latest model response in a chat |
 
 ### Gems
 
@@ -61,7 +62,17 @@
 |---|---|---|
 | `/v1/gemini/research/plan` | POST | Create a deep research plan |
 | `/v1/gemini/research/start` | POST | Start a deep research |
+| `/v1/gemini/research/full` | POST | One-shot research (plan→start→wait) |
 | `/v1/gemini/research/{id}/status` | GET | Get research status |
+
+#### `POST /v1/gemini/research/full` — Request body
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `prompt` | string | ✅ | — | Research topic or question |
+| `model` | string | ❌ | auto | Model override |
+| `poll_interval` | float | ❌ | 10.0 | Seconds between status polls |
+| `timeout` | float | ❌ | 600.0 | Max seconds to wait |
 
 #### `POST /v1/gemini/research/plan` — Request body
 

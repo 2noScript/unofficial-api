@@ -33,10 +33,10 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta 
 
 | Provider | Credentials Guide | Specific Endpoints |
 |---|---|---|
-| DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | None |
+| DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | [search_enabled, expert models, reasoning_content](docs/deepseek.md#chat-completions--additional-fields) |
 | Gemini | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
 | NotebookLM | [`docs/notebooklm.md`](docs/notebooklm.md) | [Notebooks, Sources, Notes, Chat, Research, Sharing, Settings, Mind Maps](docs/notebooklm.md) · [Artifacts (~32)](docs/notebooklm-artifacts.md) |
-| Meta AI | [`docs/metaai.md`](docs/metaai.md) | [Image Gen, Video Gen](docs/metaai.md#provider-specific-endpoints) |
+| Meta AI | [`docs/metaai.md`](docs/metaai.md) | [Image Gen, Video Gen, Image Upload, Video Extend, Media](docs/metaai.md#provider-specific-endpoints) |
 | Grok | [`docs/grok.md`](docs/grok.md) | None |
 
 ## Configuration
@@ -86,7 +86,7 @@ docker compose down
 These share the same format across all providers.
 
 | Endpoint | Method | DeepSeek | Gemini | NotebookLM | Meta AI | Grok |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|
 | `GET /v1/{provider}/models` | GET | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `POST /v1/{provider}/chat/completions` | POST | ✅ | ✅ | ✅ | ✅ | ✅ |
 

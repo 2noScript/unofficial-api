@@ -3,19 +3,15 @@ import sys
 import json
 import time
 import asyncio
-from io import StringIO
-from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncGenerator
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "deepseek-api"))
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
-from app.schemas import ChatCompletionRequest, ChatCompletionResponse, ModelList, ModelObject
 
 router = APIRouter(tags=["DeepSeek"])
-_executor = ThreadPoolExecutor(max_workers=4)
 
 DEEPSEEK_MODELS = [
     {
@@ -46,6 +42,20 @@ DEEPSEEK_MODELS = [
         "owned_by": "deepseek",
         "description": "DeepSeek R4 - Expert reasoning model with extended thinking",
     },
+    {
+        "id": "deepseek-v4-expert",
+        "object": "model",
+        "created": 1704067200,
+        "owned_by": "deepseek",
+        "description": "DeepSeek V4 Expert - Expert mode without extended thinking",
+    },
+    {
+        "id": "deepseek-r4-expert",
+        "object": "model",
+        "created": 1704067200,
+        "owned_by": "deepseek",
+        "description": "DeepSeek R4 Expert - Expert reasoning model with extended thinking",
+    },
 ]
 
 
@@ -61,92 +71,52 @@ def _get_auth():
 
 def _get_model_config(model: str):
     model_lower = model.lower()
-    model_type = "default"
+    is_expert = "expert" in model_lower
+    model_type = "expert" if is_expert else "default"
     thinking_enabled = "r1" in model_lower or "r4" in model_lower or "reasoning" in model_lower or "reasoner" in model_lower
-    return model_type, thinking_enabled
+    # Normalize base model name for display
+    if is_expert:
+        base = model_lower.replace("-expert", "")
+    else:
+        base = model_lower
+    return model_type, thinking_enabled, base
 
 
-def _run_chat(messages: list, model_type: str, thinking_enabled: bool) -> str:
+def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> dict:
     ds_session_id, auth_token = _get_auth()
     user_message = messages[-1]["content"] if messages else ""
 
-    old_stdout = sys.stdout
-    sys.stdout = mystdout = StringIO()
-    try:
-        chat = DeepSeekChat(ds_session_id, auth_token)
-        chat.send_message(
-            user_message,
-            printing=True,
-            thinking_enabled=thinking_enabled,
-            search_enabled=False,
-            model_type=model_type,
-        )
-    finally:
-        sys.stdout = old_stdout
+    chat = DeepSeekChat(ds_session_id, auth_token)
+    result = chat.send_message(
+        user_message,
+        thinking_enabled=thinking_enabled,
+        search_enabled=search_enabled,
+        model_type=model_type,
+    )
 
-    output = mystdout.getvalue()
+    if not isinstance(result, dict):
+        return {"response": str(result) if result else ""}
 
-    in_response = False
-    response_text = ""
-    for line in output.split("\n"):
-        if "START RESPONSE" in line:
-            in_response = True
-            continue
-        elif "FINISHED" in line:
-            break
-        elif "START THINK" in line:
-            in_response = False
-            continue
-        if in_response and line.strip():
-            response_text += line + "\n"
+    if not result.get("ok"):
+        return {"response": result.get("content", "Unknown error")}
 
-    return response_text.strip() if response_text else output.strip()
+    content = result.get("content", {})
+    if isinstance(content, dict):
+        return content
+    return {"response": str(content)}
 
 
-def _run_chat_and_get_lines(messages: list, model_type: str, thinking_enabled: bool) -> list[str]:
-    ds_session_id, auth_token = _get_auth()
-    user_message = messages[-1]["content"] if messages else ""
-
-    old_stdout = sys.stdout
-    sys.stdout = mystdout = StringIO()
-    try:
-        chat = DeepSeekChat(ds_session_id, auth_token)
-        chat.send_message(
-            user_message,
-            printing=True,
-            thinking_enabled=thinking_enabled,
-            search_enabled=False,
-            model_type=model_type,
-        )
-    finally:
-        sys.stdout = old_stdout
-
-    output = mystdout.getvalue()
-    lines = []
-    in_response = False
-    for line in output.split("\n"):
-        if "START RESPONSE" in line:
-            in_response = True
-            continue
-        elif "FINISHED" in line:
-            break
-        elif "START THINK" in line:
-            in_response = False
-            continue
-        if in_response and line.strip():
-            lines.append(line + "\n")
-    return lines
-
-
-async def _stream_chat(messages: list, model_type: str, thinking_enabled: bool) -> AsyncGenerator[str, None]:
+async def _stream_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
     try:
         loop = asyncio.get_event_loop()
-        lines = await loop.run_in_executor(
-            _executor, _run_chat_and_get_lines, messages, model_type, thinking_enabled
+        result = await loop.run_in_executor(
+            None, _run_chat, messages, model_type, thinking_enabled, search_enabled
         )
-        for line in lines:
-            chunk = json.dumps({"choices": [{"delta": {"content": line}}]})
-            yield f"data: {chunk}\n\n"
+        text = result.get("response", "")
+        for line in text.split("\n"):
+            if line.strip():
+                chunk = json.dumps({"choices": [{"delta": {"content": line + "\n"}}]})
+                yield f"data: {chunk}\n\n"
         yield "data: [DONE]\n\n"
     except ValueError as e:
         data = json.dumps({"error": str(e)})
@@ -156,48 +126,42 @@ async def _stream_chat(messages: list, model_type: str, thinking_enabled: bool) 
         yield f"data: {data}\n\n"
 
 
-@router.get(
-    "/models",
-    summary="List available DeepSeek models",
-    response_model=ModelList,
-)
-def list_models():
+@router.get("/models", summary="List available DeepSeek models")
+async def list_models():
     return {"object": "list", "data": DEEPSEEK_MODELS}
 
 
-@router.post(
-    "/chat/completions",
-    summary="Create a chat completion using DeepSeek models",
-    response_model=ChatCompletionResponse,
-)
-async def chat_completions(body: ChatCompletionRequest):
-    messages = [m.model_dump() for m in body.messages]
-    stream = body.stream
-    model = body.model or "deepseek-v3"
+@router.post("/chat/completions", summary="Create a chat completion using DeepSeek models")
+async def chat_completions(request: Request):
+    body = await request.json()
+    messages = body.get("messages", [])
+    stream = body.get("stream", False)
+    model = body.get("model", "deepseek-v3")
+    search_enabled = body.get("search_enabled", False)
 
-    model_type, thinking_enabled = _get_model_config(model)
+    model_type, thinking_enabled, _ = _get_model_config(model)
 
     try:
         if stream:
             return StreamingResponse(
-                _stream_chat(messages, model_type, thinking_enabled),
+                _stream_chat(messages, model_type, thinking_enabled, search_enabled),
                 media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                },
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            _executor, _run_chat, messages, model_type, thinking_enabled
+            None, _run_chat, messages, model_type, thinking_enabled, search_enabled
         )
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=401)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-    return JSONResponse({
+    response_text = result.get("response", "")
+    thought = result.get("thought")
+
+    resp = {
         "id": f"chatcmpl-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
@@ -205,13 +169,26 @@ async def chat_completions(body: ChatCompletionRequest):
         "choices": [
             {
                 "index": 0,
-                "message": {"role": "assistant", "content": result},
+                "message": {"role": "assistant", "content": response_text},
                 "finish_reason": "stop",
             }
         ],
         "usage": {
             "prompt_tokens": 0,
-            "completion_tokens": len(result.split()) if result else 0,
-            "total_tokens": len(result.split()) if result else 0,
+            "completion_tokens": len(response_text.split()) if response_text else 0,
+            "total_tokens": len(response_text.split()) if response_text else 0,
         },
-    })
+    }
+
+    if thought:
+        resp["choices"][0]["message"]["reasoning_content"] = thought
+
+    citation = result.get("citation")
+    if citation:
+        resp["citation"] = citation
+
+    title = result.get("title")
+    if title:
+        resp["title"] = title
+
+    return JSONResponse(resp)

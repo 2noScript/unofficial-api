@@ -26,11 +26,11 @@ unofficial-api/
 │   ├── schemas.py             # Shared Pydantic models (OpenAI-compatible + provider-specific)
 │   └── routers/
 │       ├── __init__.py
-│       ├── deepseek/           # 2 routes (models, chat/completions)
+│               ├── deepseek/           # 2 routes (models, chat/completions + search_enabled + expert models)
 │       │   ├── __init__.py
 │       │   ├── router.py       # APIRouter instance, imported by server
 │       │   └── routes.py       # Endpoint handlers
-│       ├── gemini/             # 12 routes
+│               ├── gemini/             # 14 routes
 │       │   ├── __init__.py
 │       │   ├── router.py
 │       │   ├── chat.py         # Chat completions + streaming
@@ -45,7 +45,7 @@ unofficial-api/
 │       │   ├── chat.py         # Chat completions (fake streaming)
 │       │   ├── models.py
 │       │   └── helpers.py
-│       ├── metaai/             # 4 routes
+│               ├── metaai/             # 8 routes
 │       │   ├── __init__.py
 │       │   ├── router.py
 │       │   ├── chat.py         # Chat completions

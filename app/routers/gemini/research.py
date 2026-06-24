@@ -5,6 +5,7 @@ from gemini_webapi import DeepResearchPlan
 from .router import router
 from .helpers import _require_client, _resolve_model_name
 from app.schemas import (
+    DeepResearchFullRequest,
     DeepResearchPlanRequest,
     DeepResearchPlanResponse,
     DeepResearchStartRequest,
@@ -103,5 +104,35 @@ async def get_research_status(research_id: str, request: Request):
             notes=status.notes,
             done=status.done,
         )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post(
+    "/research/full",
+    summary="One-shot deep research: plan → start → wait for completion",
+)
+async def full_deep_research(body: DeepResearchFullRequest, request: Request):
+    client = _require_client(request)
+    if isinstance(client, JSONResponse):
+        return client
+
+    resolved_model = _resolve_model_name(body.model) if body.model else None
+    model_kw = {"model": resolved_model} if resolved_model else {}
+
+    try:
+        result = await client.deep_research(
+            body.prompt,
+            poll_interval=body.poll_interval,
+            timeout=body.timeout,
+            **model_kw,
+        )
+        return {
+            "done": result.done,
+            "plan": result.plan.model_dump() if hasattr(result.plan, "model_dump") else str(result.plan),
+            "initial_response": result.start_output.text if result.start_output else None,
+            "final_response": result.final_output.text if result.final_output else None,
+            "status_count": len(result.statuses) if result.statuses else 0,
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

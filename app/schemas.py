@@ -137,6 +137,13 @@ class DeepResearchPlanResponse(BaseModel):
     response_text: str | None = Field(None, description="Full model response text")
 
 
+class DeepResearchFullRequest(BaseModel):
+    prompt: str = Field(..., description="Research topic or question", min_length=1)
+    model: str | None = Field(None, description="Model to use")
+    poll_interval: float = Field(10.0, description="Seconds between status polls", gt=0)
+    timeout: float = Field(600.0, description="Max seconds to wait", gt=0)
+
+
 class DeepResearchStartRequest(BaseModel):
     plan: DeepResearchPlanSchema = Field(..., description="Plan from create endpoint")
     confirm_prompt: str | None = Field(None, description="Override confirmation prompt")

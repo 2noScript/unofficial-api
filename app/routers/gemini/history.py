@@ -60,6 +60,28 @@ async def read_chat(cid: str, request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@router.get(
+    "/chats/{cid}/latest-response",
+    summary="Get the latest model response in a chat conversation",
+)
+async def get_latest_chat_response(cid: str, request: Request):
+    client = _require_client(request)
+    if isinstance(client, JSONResponse):
+        return client
+
+    try:
+        output = await client.fetch_latest_chat_response(cid)
+        if not output:
+            return JSONResponse({"error": "No response found"}, status_code=404)
+        return {
+            "cid": cid,
+            "text": output.text or "",
+            "thoughts": output.thoughts or "",
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @router.delete(
     "/chats/{cid}",
     summary="Delete a Gemini chat conversation",

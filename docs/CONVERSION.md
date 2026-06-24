@@ -132,9 +132,11 @@ These endpoints have no OpenAI equivalent and exist only for their respective pr
 | `POST /v1/gemini/gems` | `client.create_gem(...)` |
 | `PATCH /v1/gemini/gems/{id}` | `client.update_gem(...)` |
 | `DELETE /v1/gemini/gems/{id}` | `client.delete_gem(id)` |
-| `POST /v1/gemini/research/plan` | `client.deep_research_plan(prompt)` |
-| `POST /v1/gemini/research/start` | `client.deep_research_start(plan)` |
-| `GET /v1/gemini/research/{id}/status` | `client.check_research_status(id)` |
+| `POST /v1/gemini/research/plan` | `client.create_deep_research_plan(prompt)` |
+| `POST /v1/gemini/research/start` | `client.start_deep_research(plan)` |
+| `POST /v1/gemini/research/full` | `client.deep_research(prompt)` — one-shot plan→start→wait |
+| `GET /v1/gemini/research/{id}/status` | `client.get_deep_research_status(id)` |
+| `GET /v1/gemini/chats/{cid}/latest-response` | `client.fetch_latest_chat_response(cid)` |
 
 ### NotebookLM
 
@@ -144,8 +146,12 @@ NotebookLM has ~84 endpoints. See [notebooklm.md](notebooklm.md) and [notebooklm
 
 | Path | Mapping |
 |---|---|
-| `POST /v1/metaai/images/generations` | `client.generate_image(prompt)` |
-| `POST /v1/metaai/videos/generations` | `client.generate_video(prompt)` |
+| `POST /v1/metaai/images/generations` | `client.generate_image_new(prompt, ...)` |
+| `POST /v1/metaai/images/upload` | `client.upload_image(file_path)` |
+| `POST /v1/metaai/videos/generations` | `client.generate_video_new(prompt, ...)` |
+| `POST /v1/metaai/videos/extend` | `client.extend_video(media_id, ...)` |
+| `GET /v1/metaai/media/{id}` | `GenerationAPI.fetch_media_by_id(id)` |
+| `GET /v1/metaai/media/{id}/status` | `GenerationAPI.fetch_media_status(id)` |
 
 ---
 
