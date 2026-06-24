@@ -8,15 +8,16 @@ from gemini_webapi import GeminiClient
 
 from .router import router
 from .helpers import _require_client, _resolve_model_name
-from app.schemas import ChatCompletionRequestGemini, ChatCompletionResponse
+from app.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 
 @router.post(
     "/chat/completions",
     summary="Create a chat completion using Gemini models",
     response_model=ChatCompletionResponse,
+    response_model_exclude_none=True,
 )
-async def chat_completions(request: Request, body: ChatCompletionRequestGemini):
+async def chat_completions(request: Request, body: ChatCompletionRequest):
     client = _require_client(request)
     if isinstance(client, JSONResponse):
         return client
@@ -24,22 +25,20 @@ async def chat_completions(request: Request, body: ChatCompletionRequestGemini):
     messages = [m.model_dump() for m in body.messages]
     stream = body.stream
     model = body.model or "gemini-3-flash"
-    files = body.files
 
     resolved_model = _resolve_model_name(model)
     prompt = messages[-1]["content"] if messages else ""
-    files_kw = {"files": files} if files else {}
 
     if stream:
         return StreamingResponse(
-            _stream_gemini(client, prompt, resolved_model, files_kw),
+            _stream_gemini(client, prompt, resolved_model),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     try:
         output = await client.generate_content(
-            prompt=prompt, model=resolved_model, **files_kw
+            prompt=prompt, model=resolved_model
         )
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -73,10 +72,10 @@ async def chat_completions(request: Request, body: ChatCompletionRequestGemini):
 
 
 async def _stream_gemini(
-    client: GeminiClient, prompt: str, resolved_model: str, files_kw: dict | None = None
+    client: GeminiClient, prompt: str, resolved_model: str
 ) -> AsyncGenerator[str, None]:
     try:
-        gen = client.generate_content_stream(prompt=prompt, model=resolved_model, **(files_kw or {}))
+        gen = client.generate_content_stream(prompt=prompt, model=resolved_model)
         async for chunk in gen:
             delta = chunk.text_delta
             if delta:

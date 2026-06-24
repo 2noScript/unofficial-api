@@ -7,9 +7,10 @@ from typing import AsyncGenerator
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "deepseek-api"))
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
+from app.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 router = APIRouter(tags=["DeepSeek"])
 
@@ -66,6 +67,8 @@ def _get_auth():
         raise ValueError(
             "DeepSeek credentials not found. Set DEEPSEEK_SESSION_ID and DEEPSEEK_AUTH_TOKEN"
         )
+    if not auth_token.startswith("Bearer "):
+        auth_token = f"Bearer {auth_token}"
     return ds_session_id, auth_token
 
 
@@ -84,7 +87,7 @@ def _get_model_config(model: str):
 
 def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> dict:
     ds_session_id, auth_token = _get_auth()
-    user_message = messages[-1]["content"] if messages else ""
+    user_message = messages[-1].content if messages else ""
 
     chat = DeepSeekChat(ds_session_id, auth_token)
     result = chat.send_message(
@@ -131,27 +134,30 @@ async def list_models():
     return {"object": "list", "data": DEEPSEEK_MODELS}
 
 
-@router.post("/chat/completions", summary="Create a chat completion using DeepSeek models")
-async def chat_completions(request: Request):
-    body = await request.json()
-    messages = body.get("messages", [])
-    stream = body.get("stream", False)
-    model = body.get("model", "deepseek-v3")
-    search_enabled = body.get("search_enabled", False)
+@router.post(
+    "/chat/completions",
+    summary="Create a chat completion using DeepSeek models",
+    response_model=ChatCompletionResponse,
+    response_model_exclude_none=True,
+)
+async def chat_completions(body: ChatCompletionRequest):
+    messages = body.messages
+    stream = body.stream
+    model = body.model or "deepseek-v3"
 
     model_type, thinking_enabled, _ = _get_model_config(model)
 
     try:
         if stream:
             return StreamingResponse(
-                _stream_chat(messages, model_type, thinking_enabled, search_enabled),
+                _stream_chat(messages, model_type, thinking_enabled, False),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            None, _run_chat, messages, model_type, thinking_enabled, search_enabled
+            None, _run_chat, messages, model_type, thinking_enabled, False
         )
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=401)
@@ -161,7 +167,7 @@ async def chat_completions(request: Request):
     response_text = result.get("response", "")
     thought = result.get("thought")
 
-    resp = {
+    return {
         "id": f"chatcmpl-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
@@ -169,7 +175,11 @@ async def chat_completions(request: Request):
         "choices": [
             {
                 "index": 0,
-                "message": {"role": "assistant", "content": response_text},
+                "message": {
+                    "role": "assistant",
+                    "content": response_text,
+                    "reasoning_content": thought,
+                },
                 "finish_reason": "stop",
             }
         ],
@@ -178,17 +188,6 @@ async def chat_completions(request: Request):
             "completion_tokens": len(response_text.split()) if response_text else 0,
             "total_tokens": len(response_text.split()) if response_text else 0,
         },
+        "citation": result.get("citation"),
+        "title": result.get("title"),
     }
-
-    if thought:
-        resp["choices"][0]["message"]["reasoning_content"] = thought
-
-    citation = result.get("citation")
-    if citation:
-        resp["citation"] = citation
-
-    title = result.get("title")
-    if title:
-        resp["title"] = title
-
-    return JSONResponse(resp)

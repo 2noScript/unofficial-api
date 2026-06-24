@@ -6,10 +6,12 @@
 2. Open DevTools (F12) → **Application** → **Cookies** → `https://chat.deepseek.com`
 3. Copy the cookie values:
 
-| Cookie name | Env var | Required |
+| Cookie/Header value | Env var | Required |
 |---|---|---|
-| `ds_session_id` | `DEEPSEEK_SESSION_ID` | ✅ |
-| `authorization` | `DEEPSEEK_AUTH_TOKEN` | ✅ |
+| `ds_session_id` (cookie) | `DEEPSEEK_SESSION_ID` | ✅ |
+| `authorization` (request header, including `Bearer ` prefix) | `DEEPSEEK_AUTH_TOKEN` | ✅ |
+
+> The `authorization` value from DevTools looks like: `Bearer eyJhbGciOiJIUzI1NiIs...`. Copy the **entire value including `Bearer ` prefix**.
 
 Or use **Cookie-Editor** extension to export all cookies at once.
 

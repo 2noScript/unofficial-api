@@ -9,9 +9,12 @@ from notebooklm import NotebookLMClient
 from notebooklm.types import ChatGoal, ChatMode, ChatResponseLength
 
 from app.schemas import (
+    ChatCompletionRequest,
+    ChatCompletionResponse,
     NLMChatConfigureRequest,
     NLMChatHistoryResponse,
     NLMChatModeRequest,
+    NLMChatReferenceResponse,
     NLMChatTurnResponse,
 )
 
@@ -22,69 +25,59 @@ from .helpers import _require_client
 @router.post(
     "/chat/completions",
     summary="Ask a question against a NotebookLM notebook (source-grounded Q&A)",
+    response_model=ChatCompletionResponse,
+    response_model_exclude_none=True,
 )
-async def chat_completions(request: Request):
+async def chat_completions(request: Request, body: ChatCompletionRequest):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
 
-    body = await request.json()
-    messages = body.get("messages", [])
-    stream = body.get("stream", False)
-    notebook_id = body.get("notebook_id")
-    source_ids = body.get("source_ids")
-    conversation_id = body.get("conversation_id")
+    messages = body.messages
+    stream = body.stream
+    notebook_id = os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID")
 
     if not notebook_id:
-        notebook_id = os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID")
-    if not notebook_id:
         return JSONResponse(
-            {"error": "notebook_id is required. Set NOTEBOOKLM_DEFAULT_NOTEBOOK_ID or pass notebook_id in request."},
+            {"error": "notebook_id is required. Set NOTEBOOKLM_DEFAULT_NOTEBOOK_ID in .env."},
             status_code=400,
         )
 
-    question = messages[-1]["content"] if messages else ""
+    question = messages[-1].content if messages else ""
     if not question:
         return JSONResponse({"error": "No question provided"}, status_code=400)
 
-    ask_kwargs = {"notebook_id": notebook_id, "question": question}
-    if source_ids:
-        ask_kwargs["source_ids"] = source_ids
-    if conversation_id:
-        ask_kwargs["conversation_id"] = conversation_id
-
     if stream:
         return StreamingResponse(
-            _stream_chat(client, notebook_id, question, source_ids),
+            _stream_chat(client, notebook_id, question),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     try:
-        result = await client.chat.ask(**ask_kwargs)
+        result = await client.chat.ask(notebook_id=notebook_id, question=question)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
     answer = result.answer or ""
-    conv_id = getattr(result, "conversation_id", None)
     refs = getattr(result, "references", [])
     refs_data = [
-        {
-            "source_id": r.source_id,
-            "citation_number": r.citation_number,
-            "cited_text": r.cited_text,
-        }
+        NLMChatReferenceResponse(
+            source_id=r.source_id or "",
+            citation_number=r.citation_number,
+            cited_text=r.cited_text,
+        )
         for r in refs
     ]
 
-    return JSONResponse({
+    return {
         "id": f"chatcmpl-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": "notebooklm-2-0",
         "notebook_id": notebook_id,
-        "conversation_id": conv_id,
+        "conversation_id": getattr(result, "conversation_id", None),
         "turn_number": getattr(result, "turn_number", None),
         "is_follow_up": getattr(result, "is_follow_up", False),
         "references": refs_data,
@@ -100,15 +93,15 @@ async def chat_completions(request: Request):
             "completion_tokens": len(answer.split()) if answer else 0,
             "total_tokens": len(answer.split()) if answer else 0,
         },
-    })
+    }
 
 
 async def _stream_chat(
-    client: NotebookLMClient, notebook_id: str, question: str, source_ids: list[str] | None
+    client: NotebookLMClient, notebook_id: str, question: str
 ) -> AsyncGenerator[str, None]:
     try:
         result = await client.chat.ask(
-            notebook_id=notebook_id, question=question, source_ids=source_ids
+            notebook_id=notebook_id, question=question
         )
         answer = result.answer or ""
         for line in answer.split("\n"):

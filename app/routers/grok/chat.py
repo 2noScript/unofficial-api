@@ -8,13 +8,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from .router import router
 from .helpers import get_client, _executor
+from app.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 
 @router.post(
     "/chat/completions",
     summary="Create a chat completion using Grok 3",
+    response_model=ChatCompletionResponse,
+    response_model_exclude_none=True,
 )
-async def chat_completions(request: Request):
+async def chat_completions(request: Request, body: ChatCompletionRequest):
     client = get_client(request)
     if not client:
         return JSONResponse(
@@ -22,10 +25,9 @@ async def chat_completions(request: Request):
             status_code=503,
         )
 
-    body = await request.json()
-    messages = body.get("messages", [])
-    stream = body.get("stream", False)
-    prompt = messages[-1]["content"] if messages else ""
+    messages = body.messages
+    stream = body.stream
+    prompt = messages[-1].content if messages else ""
 
     if not prompt:
         return JSONResponse({"error": "No prompt provided"}, status_code=400)
@@ -43,7 +45,7 @@ async def chat_completions(request: Request):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-    return JSONResponse({
+    return {
         "id": f"chatcmpl-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
@@ -60,7 +62,7 @@ async def chat_completions(request: Request):
             "completion_tokens": len(result.split()) if result else 0,
             "total_tokens": len(result.split()) if result else 0,
         },
-    })
+    }
 
 
 def _run_chat(client, prompt: str) -> str:

@@ -32,6 +32,7 @@ class ChatCompletionRequest(BaseModel):
     )
 
 
+
 class Usage(BaseModel):
     prompt_tokens: int = Field(0, description="Number of prompt tokens")
     completion_tokens: int = Field(0, description="Number of completion tokens")
@@ -52,6 +53,14 @@ class Choice(BaseModel):
     finish_reason: str = Field("stop", description="Reason for finishing")
 
 
+class NLMChatReferenceResponse(BaseModel):
+    source_id: str = Field("", description="Referenced source ID")
+    citation_number: int | None = Field(None, description="Citation number")
+    cited_text: str | None = Field(None, description="Cited text excerpt")
+    start_char: int | None = Field(None, description="Start character position")
+    end_char: int | None = Field(None, description="End character position")
+
+
 class ChatCompletionResponse(BaseModel):
     id: str = Field(..., description="Unique chat completion ID", examples=["chatcmpl-1234567890"])
     object: str = Field("chat.completion", description="Object type")
@@ -59,6 +68,13 @@ class ChatCompletionResponse(BaseModel):
     model: str = Field(..., description="Model used")
     choices: list[Choice] = Field(..., description="List of completion choices")
     usage: Usage = Field(..., description="Token usage statistics")
+    citation: str | None = Field(None, description="Citation (DeepSeek)")
+    title: str | None = Field(None, description="Title (DeepSeek)")
+    notebook_id: str | None = Field(None, description="Notebook ID used (NotebookLM)")
+    conversation_id: str | None = Field(None, description="Conversation ID (NotebookLM)")
+    turn_number: int | None = Field(None, description="Turn index (NotebookLM)")
+    is_follow_up: bool | None = Field(None, description="Whether this is a follow-up (NotebookLM)")
+    references: list[NLMChatReferenceResponse] | None = Field(None, description="Source citations (NotebookLM)")
 
 
 class ModelObject(BaseModel):
@@ -159,12 +175,7 @@ class DeepResearchStatusSchema(BaseModel):
     done: bool = Field(False, description="Whether research is complete")
 
 
-class ChatCompletionRequestGemini(ChatCompletionRequest):
-    files: list[str] = Field(
-        default_factory=list,
-        description="List of file paths to attach",
-        examples=[["/path/to/image.jpg", "/path/to/doc.pdf"]],
-    )
+
 
 
 # === NotebookLM Artifacts ===
@@ -383,14 +394,6 @@ class NLMChatModeRequest(BaseModel):
 
 class NLMChatSaveNoteRequest(BaseModel):
     title: str | None = Field(None, description="Note title (auto-derived from answer if omitted)")
-
-
-class NLMChatReferenceResponse(BaseModel):
-    source_id: str = Field("", description="Referenced source ID")
-    citation_number: int | None = Field(None, description="Citation number")
-    cited_text: str | None = Field(None, description="Cited text excerpt")
-    start_char: int | None = Field(None, description="Start character position")
-    end_char: int | None = Field(None, description="End character position")
 
 
 class NLMChatTurnResponse(BaseModel):
