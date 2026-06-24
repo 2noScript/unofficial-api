@@ -8,6 +8,7 @@ dependencies = [
     "curl-cffi>=0.15.0",
     "fastapi[standard]>=0.138.0",
     "loguru>=0.7.3",
+    "notebooklm-py>=0.7.2",
     "orjson>=3.11.7",
     "requests>=2.34.2",
     "wasmtime>=45.0.0",

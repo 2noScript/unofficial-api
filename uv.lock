@@ -404,6 +404,15 @@ wheels = [
 ]
 
 [[package]]
+name = "filelock"
+version = "3.29.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/dc/be6cbe99670cd6e4ad387123647cb08e0c32975e223f82551e914c5568a6/filelock-3.29.4.tar.gz", hash = "sha256:10cdb3656fc44541cdf30652a93fb10ec6b05325620eb316bd26893e4201538a", size = 63028, upload-time = "2026-06-13T16:12:00.744Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/37/a065dc3bd6e49423a6532c642ca7378d3f467b1ef44c2800c937af7f9739/filelock-3.29.4-py3-none-any.whl", hash = "sha256:dac1648087d5115554850d113e7dd8c83ab2d38e3435dde2d4f163847e57b767", size = 42757, upload-time = "2026-06-13T16:11:59.582Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -592,6 +601,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
+]
+
+[[package]]
+name = "notebooklm-py"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "filelock" },
+    { name = "httpx" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f8/fa/bdf177fc4b7805c09145df7439ff1a37a400539062b1f649e0fb935ff351/notebooklm_py-0.7.2.tar.gz", hash = "sha256:4ca061bb1c0b7075921d4f3a6e9d08fe08fb28102c39752ef30a007d5edfa130", size = 10972287, upload-time = "2026-06-18T15:53:01.825Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/67/625329cb15e7411c8b05763aeeebe9db6fc7cacedcc604ec580d653b1e7f/notebooklm_py-0.7.2-py3-none-any.whl", hash = "sha256:d850cfea2494732bc5f153406a9637c3ee5fe931d87901d101c026df2a6ecf65", size = 788323, upload-time = "2026-06-18T15:52:59.811Z" },
 ]
 
 [[package]]
@@ -1040,6 +1064,7 @@ dependencies = [
     { name = "curl-cffi" },
     { name = "fastapi", extra = ["standard"] },
     { name = "loguru" },
+    { name = "notebooklm-py" },
     { name = "orjson" },
     { name = "requests" },
     { name = "wasmtime" },
@@ -1050,6 +1075,7 @@ requires-dist = [
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.138.0" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "notebooklm-py", specifier = ">=0.7.2" },
     { name = "orjson", specifier = ">=3.11.7" },
     { name = "requests", specifier = ">=2.34.2" },
     { name = "wasmtime", specifier = ">=45.0.0" },
