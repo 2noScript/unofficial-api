@@ -89,31 +89,39 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
     ds_session_id, auth_token = _get_auth()
     user_message = messages[-1].content if messages else ""
 
-    chat = DeepSeekChat(ds_session_id, auth_token)
-    result = chat.send_message(
-        user_message,
-        thinking_enabled=thinking_enabled,
-        search_enabled=search_enabled,
-        model_type=model_type,
-    )
+    last_error: str = "Unknown error"
 
-    if result is None:
-        raise RuntimeError("DeepSeek returned no response. Check credentials or session.")
+    for attempt in range(2):  # retry once for WASM warm-up on first call
+        chat = DeepSeekChat(ds_session_id, auth_token)
+        result = chat.send_message(
+            user_message,
+            thinking_enabled=thinking_enabled,
+            search_enabled=search_enabled,
+            model_type=model_type,
+        )
 
-    if not isinstance(result, dict):
-        raise RuntimeError(f"Unexpected response type from DeepSeek: {result}")
+        if result is None:
+            last_error = "DeepSeek returned no response. Check credentials or session."
+            continue
 
-    if not result.get("ok"):
-        # content may be bytes (raw HTTP error body) or string
-        err = result.get("content", "Unknown error")
-        if isinstance(err, (bytes, bytearray)):
-            err = err.decode("utf-8", errors="replace")
-        raise RuntimeError(f"DeepSeek error: {err}")
+        if not isinstance(result, dict):
+            last_error = f"Unexpected response type from DeepSeek: {result}"
+            continue
 
-    content = result.get("content", {})
-    if isinstance(content, dict):
-        return content
-    return {"response": str(content)}
+        if not result.get("ok"):
+            err = result.get("content", "Unknown error")
+            if isinstance(err, (bytes, bytearray)):
+                err = err.decode("utf-8", errors="replace")
+            last_error = f"DeepSeek error: {err}"
+            continue
+
+        # success
+        content = result.get("content", {})
+        if isinstance(content, dict):
+            return content
+        return {"response": str(content)}
+
+    raise RuntimeError(last_error)
 
 
 async def _stream_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
