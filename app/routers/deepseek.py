@@ -61,7 +61,7 @@ def _get_auth():
 
 def _get_model_config(model: str):
     model_lower = model.lower()
-    model_type = "expert" if "v4" in model_lower or "r4" in model_lower or "expert" in model_lower else "default"
+    model_type = "default"
     thinking_enabled = "r1" in model_lower or "r4" in model_lower or "reasoning" in model_lower or "reasoner" in model_lower
     return model_type, thinking_enabled
 
