@@ -7,7 +7,7 @@ from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncGenerator
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deepseek-api"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "deepseek-api"))
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
