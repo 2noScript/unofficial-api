@@ -9,11 +9,12 @@ from typing import AsyncGenerator
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deepseek-api"))
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
+from app.schemas import ChatCompletionRequest, ChatCompletionResponse, ModelList, ModelObject
 
-router = APIRouter()
+router = APIRouter(tags=["DeepSeek"])
 _executor = ThreadPoolExecutor(max_workers=4)
 
 DEEPSEEK_MODELS = [
@@ -155,17 +156,24 @@ async def _stream_chat(messages: list, model_type: str, thinking_enabled: bool) 
         yield f"data: {data}\n\n"
 
 
-@router.get("/models")
+@router.get(
+    "/models",
+    summary="List available DeepSeek models",
+    response_model=ModelList,
+)
 def list_models():
     return {"object": "list", "data": DEEPSEEK_MODELS}
 
 
-@router.post("/chat/completions")
-async def chat_completions(request: Request):
-    body = await request.json()
-    messages = body.get("messages", [])
-    stream = body.get("stream", False)
-    model = body.get("model", "deepseek-v3")
+@router.post(
+    "/chat/completions",
+    summary="Create a chat completion using DeepSeek models",
+    response_model=ChatCompletionResponse,
+)
+async def chat_completions(body: ChatCompletionRequest):
+    messages = [m.model_dump() for m in body.messages]
+    stream = body.stream
+    model = body.model or "deepseek-v3"
 
     model_type, thinking_enabled = _get_model_config(model)
 

@@ -11,8 +11,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from gemini_webapi import GeminiClient
 from gemini_webapi.constants import Model as GeminiModel
+from app.schemas import ChatCompletionRequest, ChatCompletionResponse, ModelList
 
-router = APIRouter()
+router = APIRouter(tags=["Gemini"])
 
 
 def _build_model_list(client: GeminiClient | None) -> list[dict]:
@@ -66,15 +67,23 @@ def _resolve_model_name(model: str) -> str:
     return model
 
 
-@router.get("/models")
+@router.get(
+    "/models",
+    summary="List available Gemini models",
+    response_model=ModelList,
+)
 async def list_models(request: Request):
     client: GeminiClient | None = getattr(request.app.state, "gemini_client", None)
     models = _build_model_list(client)
     return {"object": "list", "data": models}
 
 
-@router.post("/chat/completions")
-async def chat_completions(request: Request):
+@router.post(
+    "/chat/completions",
+    summary="Create a chat completion using Gemini models",
+    response_model=ChatCompletionResponse,
+)
+async def chat_completions(request: Request, body: ChatCompletionRequest):
     client: GeminiClient | None = getattr(request.app.state, "gemini_client", None)
     if not client:
         return JSONResponse(
@@ -82,10 +91,9 @@ async def chat_completions(request: Request):
             status_code=503,
         )
 
-    body = await request.json()
-    messages = body.get("messages", [])
-    stream = body.get("stream", False)
-    model = body.get("model", "gemini-2-0-flash")
+    messages = [m.model_dump() for m in body.messages]
+    stream = body.stream
+    model = body.model or "gemini-3-flash"
 
     resolved_model = _resolve_model_name(model)
 
