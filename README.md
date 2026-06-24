@@ -49,7 +49,34 @@ GEMINI_SECURE_1PSID=nhập_secure_1psid_vào_đây
 GEMINI_SECURE_1PSIDTS=nhập_secure_1psidts_vào_đây
 ```
 
-## Chạy
+## Docker
+
+### Build & push đa nền tảng
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t 2noscript/unofficial-api:latest \
+  --push .
+```
+
+### Chạy bằng docker-compose
+
+```bash
+docker compose up -d
+```
+
+Xem log:
+```bash
+docker compose logs -f
+```
+
+Dừng:
+```bash
+docker compose down
+```
+
+## Chạy (local)
 
 ```bash
 ./run.sh

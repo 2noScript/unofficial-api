@@ -1,0 +1,11 @@
+.git/
+.gitmodules
+.venv/
+.env
+__pycache__/
+*.pyc
+.DS_Store
+.python-version
+README.md
+assets/
+templates/
