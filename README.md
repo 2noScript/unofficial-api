@@ -1,5 +1,15 @@
 # Unofficial API Gateway
 
+> **⚠️ Unofficial & Experimental**
+>
+> This project uses **undocumented, unofficial APIs** from DeepSeek, Google (Gemini), and Google (NotebookLM). These are **not officially supported** by any provider.
+>
+> - APIs can break or change without notice
+> - Rate limits and throttling apply
+> - Credentials (cookies) expire and must be refreshed
+> - **Not affiliated** with DeepSeek or Google
+> - For **prototypes, research, and personal projects** only
+
 OpenAI-compatible REST API for **DeepSeek**, **Gemini**, and **NotebookLM**.
 
 ## Getting Started
