@@ -12,6 +12,10 @@
 
 OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta AI**, and **Grok**.
 
+> 📖 [Architecture Overview](docs/ARCHITECTURE.md) — project structure, lifecycle, client types, streaming, auth, Docker
+>
+> 🔄 [Provider Conversion Details](docs/CONVERSION.md) — OpenAI field mapping per provider
+
 ## Getting Started
 
 1. Pick a provider → follow its credential guide
@@ -31,7 +35,7 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta 
 |---|---|---|
 | DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | None |
 | Gemini | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
-| NotebookLM | [`docs/notebooklm.md`](docs/notebooklm.md) | [Notebooks, Sources](docs/notebooklm.md#provider-specific-endpoints) |
+| NotebookLM | [`docs/notebooklm.md`](docs/notebooklm.md) | [Notebooks, Sources, Notes, Chat, Research, Sharing, Settings, Mind Maps](docs/notebooklm.md) · [Artifacts (~32)](docs/notebooklm-artifacts.md) |
 | Meta AI | [`docs/metaai.md`](docs/metaai.md) | [Image Gen, Video Gen](docs/metaai.md#provider-specific-endpoints) |
 | Grok | [`docs/grok.md`](docs/grok.md) | None |
 
