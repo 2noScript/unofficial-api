@@ -12,6 +12,7 @@ COPY app/ app/
 COPY deepseek-api/ deepseek-api/
 COPY Gemini-API/ Gemini-API/
 COPY metaai-api/ metaai-api/
+COPY GrokWeb-to-API/ GrokWeb-to-API/
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000

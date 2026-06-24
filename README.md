@@ -2,7 +2,7 @@
 
 > **⚠️ Unofficial & Experimental**
 >
-> This project uses **undocumented, unofficial APIs** from DeepSeek, Google (Gemini), Google (NotebookLM), and Meta (Meta AI). These are **not officially supported** by any provider.
+> This project uses **undocumented, unofficial APIs** from DeepSeek, Google (Gemini), Google (NotebookLM), Meta (Meta AI), and xAI (Grok). These are **not officially supported** by any provider.
 >
 > - APIs can break or change without notice
 > - Rate limits and throttling apply
@@ -10,7 +10,7 @@
 > - **Not affiliated** with DeepSeek or Google
 > - For **prototypes, research, and personal projects** only
 
-OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, and **Meta AI**.
+OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta AI**, and **Grok**.
 
 ## Getting Started
 
@@ -33,6 +33,7 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, and **M
 | Gemini | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
 | NotebookLM | [`docs/notebooklm.md`](docs/notebooklm.md) | [Notebooks, Sources](docs/notebooklm.md#provider-specific-endpoints) |
 | Meta AI | [`docs/metaai.md`](docs/metaai.md) | [Image Gen, Video Gen](docs/metaai.md#provider-specific-endpoints) |
+| Grok | [`docs/grok.md`](docs/grok.md) | None |
 
 ## Configuration
 
@@ -51,6 +52,8 @@ cp .env.example .env
 | `META_AI_DATR` | ✅ | Meta AI `datr` cookie — [docs](docs/metaai.md) |
 | `META_AI_ECTO_1_SESS` | ❌ | Meta AI `ecto_1_sess` cookie — [docs](docs/metaai.md) |
 | `META_AI_ABRA_SESS` | ❌ | Meta AI `abra_sess` cookie — [docs](docs/metaai.md) |
+| `GROK_SSO` | ✅ | Grok `sso` cookie — [docs](docs/grok.md) |
+| `GROK_SSO_RW` | ✅ | Grok `sso-rw` cookie — [docs](docs/grok.md) |
 
 \*Required for NotebookLM endpoints.
 
@@ -78,16 +81,16 @@ docker compose down
 
 These share the same format across all providers.
 
-| Endpoint | Method | DeepSeek | Gemini | NotebookLM | Meta AI |
-|---|---|---|---|---|---|
-| `GET /v1/{provider}/models` | GET | ✅ | ✅ | ✅ | ✅ |
-| `POST /v1/{provider}/chat/completions` | POST | ✅ | ✅ | ✅ | ✅ |
+| Endpoint | Method | DeepSeek | Gemini | NotebookLM | Meta AI | Grok |
+|---|---|---|---|---|---|---|---|
+| `GET /v1/{provider}/models` | GET | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `POST /v1/{provider}/chat/completions` | POST | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ### Request body
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `gemini-3-flash`, `notebooklm-2-0`, `llama-4`) |
+| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `gemini-3-flash`, `notebooklm-2-0`, `llama-4`, `grok-3`) |
 | `messages` | array | ✅ | — | `[{"role": "user", "content": "..."}]` |
 | `stream` | bool | ❌ | `false` | Enable SSE streaming |
 
