@@ -4,4 +4,4 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Gemini-API/src"))
 
 from .router import router
-from . import models, chat, history, gems, research
+from . import models, chat

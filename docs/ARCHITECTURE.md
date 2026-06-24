@@ -14,6 +14,8 @@ This project is a **unified OpenAI-compatible API gateway** that proxies request
 
 All providers expose two OpenAI-compatible endpoints (`/models`, `/chat/completions`) plus provider-specific endpoints under `/v1/{provider}/...`.
 
+NotebookLM additionally exposes media generation endpoints (audio, video, cinematic video) under `/v1/notebooklm/notebooks/{id}/artifacts/...`.
+
 ---
 
 ## Project Structure
@@ -26,18 +28,15 @@ unofficial-api/
 │   ├── schemas.py             # Shared Pydantic models (OpenAI-compatible + provider-specific)
 │   └── routers/
 │       ├── __init__.py
-│               ├── deepseek/           # 2 routes (models, chat/completions + search_enabled + expert models)
+│       ├── deepseek/           # 2 routes (models, chat/completions)
 │       │   ├── __init__.py
 │       │   ├── router.py       # APIRouter instance, imported by server
 │       │   └── routes.py       # Endpoint handlers
-│               ├── gemini/             # 14 routes
+│       ├── gemini/             # 2 routes
 │       │   ├── __init__.py
 │       │   ├── router.py
 │       │   ├── chat.py         # Chat completions + streaming
 │       │   ├── models.py       # Model list
-│       │   ├── history.py      # Chat history CRUD
-│       │   ├── gems.py         # Gems (custom GPTs) CRUD
-│       │   ├── research.py     # Deep research start/poll
 │       │   └── helpers.py      # Shared utils, response builders
 │       ├── grok/               # 2 routes
 │       │   ├── __init__.py
@@ -45,27 +44,20 @@ unofficial-api/
 │       │   ├── chat.py         # Chat completions (fake streaming)
 │       │   ├── models.py
 │       │   └── helpers.py
-│               ├── metaai/             # 8 routes
+│       ├── metaai/             # 8 routes
 │       │   ├── __init__.py
 │       │   ├── router.py
 │       │   ├── chat.py         # Chat completions
 │       │   ├── models.py
-│       │   ├── generation.py   # Image + Video generation
+│       │   ├── generation.py   # Image + Video generation (media)
 │       │   └── helpers.py
-│       └── notebooklm/         # ~84 routes
+│       └── notebooklm/         # ~15 routes
 │           ├── __init__.py
 │           ├── router.py
-│           ├── helpers.py       # Client fetch, artifact/status response builders
-│           ├── models.py        # Model list
-│           ├── notebooks.py     # Notebook CRUD
-│           ├── sources.py       # Source CRUD + management (14 routes)
-│           ├── notes.py         # Note CRUD (5 routes)
+│           ├── helpers.py       # Client fetch, response builders
+│           ├── models.py        # Model list (1 route)
 │           ├── chat.py          # Chat completions + conversation management (7 routes)
-│           ├── artifacts.py     # Artifact generation + download (32 routes)
-│           ├── research.py      # Research start/poll/wait/import (5 routes)
-│           ├── sharing.py       # Sharing management (6 routes)
-│           ├── settings.py      # Account settings (4 routes)
-│           └── mind_maps.py     # Mind map CRUD + tree (6 routes)
+│           └── artifacts.py     # Media generation + download — audio/video/cinematic (7 routes)
 ├── deepseek-api/         # Vendored SDK (git submodule)
 ├── Gemini-API/           # Vendored SDK (git submodule)
 ├── notebooklm-py/        # Vendored SDK (git submodule)
@@ -96,7 +88,7 @@ Each provider follows the same convention:
 2. **`__init__.py`** — Imports the router and all handler modules (so endpoints register via `@router.get/post/...` decorators)
 3. **Handler files** — Each file imports `from .router import router` and decorates functions
 
-NotebookLM uses a flat file-per-feature approach (13 files). Other providers use fewer files since they have fewer routes.
+NotebookLM uses a flat file-per-feature approach (3 files). Other providers use fewer files since they have fewer routes.
 
 ---
 
