@@ -22,6 +22,10 @@ from .router import router
 from .helpers import _require_client
 
 
+def _require_notebook_id() -> str | None:
+    return os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID") or None
+
+
 @router.post(
     "/chat/completions",
     summary="Ask a question against a NotebookLM notebook (source-grounded Q&A)",
@@ -40,22 +44,22 @@ async def chat_completions(
                 },
             }
         }
-    )
+    ),
 ):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
 
-    messages = body.messages
-    stream = body.stream
-    notebook_id = os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID")
-
+    notebook_id = _require_notebook_id()
     if not notebook_id:
         return JSONResponse(
-            {"error": "notebook_id is required. Set NOTEBOOKLM_DEFAULT_NOTEBOOK_ID in .env."},
+            {"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."},
             status_code=400,
         )
+
+    messages = body.messages
+    stream = body.stream
 
     question = messages[-1].content if messages else ""
     if not question:
@@ -128,14 +132,18 @@ async def _stream_chat(
 
 
 @router.get(
-    "/notebooks/{notebook_id}/chat/conversation-id",
+    "/chat/conversation-id",
     summary="Get the most recent conversation ID",
 )
-async def get_conversation_id(notebook_id: str, request: Request):
+async def get_conversation_id(request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         conv_id = await client.chat.get_conversation_id(notebook_id)
@@ -145,11 +153,10 @@ async def get_conversation_id(notebook_id: str, request: Request):
 
 
 @router.get(
-    "/notebooks/{notebook_id}/chat/history",
+    "/chat/history",
     summary="Get Q&A history for the most recent conversation",
 )
 async def get_chat_history(
-    notebook_id: str,
     request: Request,
     limit: int = 100,
     conversation_id: str | None = None,
@@ -158,6 +165,10 @@ async def get_chat_history(
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         kwargs = {"notebook_id": notebook_id, "limit": limit}
@@ -168,7 +179,6 @@ async def get_chat_history(
             NLMChatTurnResponse(query=q, answer=a, turn_number=i)
             for i, (q, a) in enumerate(history)
         ]
-        # fetch conversation_id if not provided
         if conversation_id is None:
             conversation_id = await client.chat.get_conversation_id(notebook_id)
         resp = NLMChatHistoryResponse(conversation_id=conversation_id or "", turns=turns)
@@ -178,11 +188,10 @@ async def get_chat_history(
 
 
 @router.get(
-    "/notebooks/{notebook_id}/chat/conversations/{conversation_id}/turns",
+    "/chat/conversations/{conversation_id}/turns",
     summary="Get turns for a specific conversation",
 )
 async def get_conversation_turns(
-    notebook_id: str,
     conversation_id: str,
     request: Request,
     limit: int = 2,
@@ -191,6 +200,10 @@ async def get_conversation_turns(
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         data = await client.chat.get_conversation_turns(
@@ -202,11 +215,10 @@ async def get_conversation_turns(
 
 
 @router.delete(
-    "/notebooks/{notebook_id}/chat/conversations/{conversation_id}",
+    "/chat/conversations/{conversation_id}",
     summary="Delete a conversation",
 )
 async def delete_conversation(
-    notebook_id: str,
     conversation_id: str,
     request: Request,
 ):
@@ -214,6 +226,10 @@ async def delete_conversation(
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         success = await client.chat.delete_conversation(notebook_id, conversation_id)
@@ -225,11 +241,10 @@ async def delete_conversation(
 
 
 @router.post(
-    "/notebooks/{notebook_id}/chat/configure",
+    "/chat/configure",
     summary="Configure chat persona and response settings",
 )
 async def configure_chat(
-    notebook_id: str,
     body: NLMChatConfigureRequest,
     request: Request,
 ):
@@ -237,6 +252,10 @@ async def configure_chat(
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         goal = ChatGoal[body.goal.upper()] if body.goal else None
@@ -267,11 +286,10 @@ async def configure_chat(
 
 
 @router.post(
-    "/notebooks/{notebook_id}/chat/mode",
+    "/chat/mode",
     summary="Set chat mode using predefined configuration",
 )
 async def set_chat_mode(
-    notebook_id: str,
     body: NLMChatModeRequest,
     request: Request,
 ):
@@ -279,6 +297,10 @@ async def set_chat_mode(
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         mode = ChatMode(body.mode)

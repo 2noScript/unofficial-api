@@ -1,3 +1,5 @@
+import os
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -26,6 +28,10 @@ from .helpers import (
 from .router import router
 
 
+def _require_notebook_id() -> str | None:
+    return os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID") or None
+
+
 async def _resolve_source_ids(client, notebook_id: str, source_ids: list[str] | None) -> list[str]:
     if source_ids is not None:
         return source_ids
@@ -47,15 +53,19 @@ async def _get_artifact_url_from_raw(client, notebook_id: str, artifact_id: str,
 
 
 @router.post(
-    "/notebooks/{notebook_id}/artifacts/generate/audio",
+    "/artifacts/generate/audio",
     summary="Generate an Audio Overview (podcast)",
     status_code=201,
 )
-async def generate_audio(notebook_id: str, body: NLMAudioGenerateRequest, request: Request):
+async def generate_audio(body: NLMAudioGenerateRequest, request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     audio_format = AudioFormat[body.audio_format.upper()] if body.audio_format else None
     audio_length = AudioLength[body.audio_length.upper()] if body.audio_length else None
@@ -76,15 +86,19 @@ async def generate_audio(notebook_id: str, body: NLMAudioGenerateRequest, reques
 
 
 @router.post(
-    "/notebooks/{notebook_id}/artifacts/generate/video",
+    "/artifacts/generate/video",
     summary="Generate a Video Overview",
     status_code=201,
 )
-async def generate_video(notebook_id: str, body: NLMVideoGenerateRequest, request: Request):
+async def generate_video(body: NLMVideoGenerateRequest, request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     video_format = VideoFormat[body.video_format.upper()] if body.video_format else None
     video_style = VideoStyle[body.video_style.upper()] if body.video_style else None
@@ -106,15 +120,19 @@ async def generate_video(notebook_id: str, body: NLMVideoGenerateRequest, reques
 
 
 @router.post(
-    "/notebooks/{notebook_id}/artifacts/generate/cinematic-video",
+    "/artifacts/generate/cinematic-video",
     summary="Generate a Cinematic Video Overview",
     status_code=201,
 )
-async def generate_cinematic_video(notebook_id: str, body: NLMGenerateRequest, request: Request):
+async def generate_cinematic_video(body: NLMGenerateRequest, request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         source_ids = await _resolve_source_ids(client, notebook_id, body.source_ids)
@@ -135,14 +153,18 @@ async def generate_cinematic_video(notebook_id: str, body: NLMGenerateRequest, r
 
 
 @router.get(
-    "/notebooks/{notebook_id}/artifacts/{task_id}/status",
+    "/artifacts/{task_id}/status",
     summary="Poll generation status",
 )
-async def poll_artifact_status(notebook_id: str, task_id: str, request: Request):
+async def poll_artifact_status(task_id: str, request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         result = await client.artifacts.poll_status(notebook_id, task_id)
@@ -152,14 +174,18 @@ async def poll_artifact_status(notebook_id: str, task_id: str, request: Request)
 
 
 @router.post(
-    "/notebooks/{notebook_id}/artifacts/{task_id}/wait",
+    "/artifacts/{task_id}/wait",
     summary="Wait for generation to complete (long-poll)",
 )
-async def wait_artifact_completion(notebook_id: str, task_id: str, body: NLMWaitRequest, request: Request):
+async def wait_artifact_completion(task_id: str, body: NLMWaitRequest, request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
 
     try:
         result = await client.artifacts.wait_for_completion(
@@ -180,14 +206,19 @@ async def wait_artifact_completion(notebook_id: str, task_id: str, body: NLMWait
 
 
 @router.get(
-    "/notebooks/{notebook_id}/artifacts/{artifact_id}/download/audio",
+    "/artifacts/{artifact_id}/download/audio",
     summary="Get Audio Overview download URL",
 )
-async def download_audio(notebook_id: str, artifact_id: str, request: Request):
+async def download_audio(artifact_id: str, request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
+
     try:
         url = await _get_artifact_url_from_raw(client, notebook_id, artifact_id, ArtifactTypeCode.AUDIO)
         return NLMArtifactDownloadUrlResponse(url=url)
@@ -196,14 +227,19 @@ async def download_audio(notebook_id: str, artifact_id: str, request: Request):
 
 
 @router.get(
-    "/notebooks/{notebook_id}/artifacts/{artifact_id}/download/video",
+    "/artifacts/{artifact_id}/download/video",
     summary="Get Video Overview download URL",
 )
-async def download_video(notebook_id: str, artifact_id: str, request: Request):
+async def download_video(artifact_id: str, request: Request):
     try:
         client = await _require_client(request)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=503)
+
+    notebook_id = _require_notebook_id()
+    if not notebook_id:
+        return JSONResponse({"error": "NOTEBOOKLM_DEFAULT_NOTEBOOK_ID is not set in .env."}, status_code=400)
+
     try:
         url = await _get_artifact_url_from_raw(client, notebook_id, artifact_id, ArtifactTypeCode.VIDEO)
         return NLMArtifactDownloadUrlResponse(url=url)

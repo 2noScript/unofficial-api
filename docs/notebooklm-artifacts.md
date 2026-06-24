@@ -2,7 +2,7 @@
 
 Artifacts are AI-generated media content based on notebook sources. Supported types: **Audio** (podcast), **Video**, and **Cinematic Video**.
 
-All paths are prefixed with `/v1/notebooklm`.
+All paths are prefixed with `/v1/notebooklm`. The notebook is determined automatically by `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` in `.env`.
 
 ---
 
@@ -38,16 +38,14 @@ Status values: `PROCESSING`, `PENDING`, `COMPLETED`, `FAILED`.
 
 ## Generate Endpoints
 
-### Audio (`POST /notebooks/{id}/artifacts/generate/audio`)
+### Audio (`POST /artifacts/generate/audio`)
 
 | Extra Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `audio_format` | string | ❌ | — | `deep_dive`, `brief`, `critique`, `debate` |
 | `audio_length` | string | ❌ | — | `short`, `default`, `long` |
 
-Generates a podcast-style Deep Dive or similar audio overview.
-
-### Video (`POST /notebooks/{id}/artifacts/generate/video`)
+### Video (`POST /artifacts/generate/video`)
 
 | Extra Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -55,7 +53,7 @@ Generates a podcast-style Deep Dive or similar audio overview.
 | `video_style` | string | ❌ | — | `auto_select`, `classic`, `whiteboard`, `anime`, etc. |
 | `style_prompt` | string | ❌ | — | Custom style prompt (requires `video_style=custom`) |
 
-### Cinematic Video (`POST /notebooks/{id}/artifacts/generate/cinematic-video`)
+### Cinematic Video (`POST /artifacts/generate/cinematic-video`)
 
 No extra fields. Generates a cinematic (movie-trailer-style) video overview.
 
@@ -65,10 +63,10 @@ No extra fields. Generates a cinematic (movie-trailer-style) video overview.
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/notebooks/{id}/artifacts/{task_id}/status` | GET | Poll generation status |
-| `/notebooks/{id}/artifacts/{task_id}/wait` | POST | Wait for completion (long-poll) |
+| `/artifacts/{task_id}/status` | GET | Poll generation status |
+| `/artifacts/{task_id}/wait` | POST | Wait for completion (long-poll) |
 
-### `POST /notebooks/{id}/artifacts/{task_id}/wait` — Request body
+### `POST /artifacts/{task_id}/wait` — Request body
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -80,8 +78,12 @@ No extra fields. Generates a cinematic (movie-trailer-style) video overview.
 
 ## Download
 
-Download endpoints return a CDN URL for the generated media.
+| Endpoint | Method | Format |
+|---|---|---|
+| `/artifacts/{artifact_id}/download/audio` | GET | mp3/wav CDN URL |
+| `/artifacts/{artifact_id}/download/video` | GET | mp4 CDN URL |
 
+Response:
 ```json
 {
   "url": "https://notebooklm.google.com/...",
@@ -90,42 +92,37 @@ Download endpoints return a CDN URL for the generated media.
 }
 ```
 
-| Endpoint | Method | Format |
-|---|---|---|
-| `/notebooks/{id}/artifacts/{aid}/download/audio` | GET | mp3/wav |
-| `/notebooks/{id}/artifacts/{aid}/download/video` | GET | mp4 |
-
 ---
 
 ## Examples
 
 ```bash
 # Generate audio (Deep Dive)
-curl -s -X POST http://localhost:8000/v1/notebooklm/notebooks/<id>/artifacts/generate/audio \
+curl -s -X POST http://localhost:8000/v1/notebooklm/artifacts/generate/audio \
   -H "Content-Type: application/json" \
   -d '{"audio_format": "deep_dive", "audio_length": "default"}'
 
 # Generate video
-curl -s -X POST http://localhost:8000/v1/notebooklm/notebooks/<id>/artifacts/generate/video \
+curl -s -X POST http://localhost:8000/v1/notebooklm/artifacts/generate/video \
   -H "Content-Type: application/json" \
   -d '{"video_format": "explainer", "video_style": "classic"}'
 
 # Generate cinematic video
-curl -s -X POST http://localhost:8000/v1/notebooklm/notebooks/<id>/artifacts/generate/cinematic-video \
+curl -s -X POST http://localhost:8000/v1/notebooklm/artifacts/generate/cinematic-video \
   -H "Content-Type: application/json" \
   -d '{}'
 
 # Poll generation status
-curl -s http://localhost:8000/v1/notebooklm/notebooks/<id>/artifacts/<task_id>/status
+curl -s http://localhost:8000/v1/notebooklm/artifacts/<task_id>/status
 
 # Wait for completion
-curl -s -X POST http://localhost:8000/v1/notebooklm/notebooks/<id>/artifacts/<task_id>/wait \
+curl -s -X POST http://localhost:8000/v1/notebooklm/artifacts/<task_id>/wait \
   -H "Content-Type: application/json" \
   -d '{"timeout": 300}'
 
 # Download audio
-curl -s http://localhost:8000/v1/notebooklm/notebooks/<id>/artifacts/<aid>/download/audio
+curl -s http://localhost:8000/v1/notebooklm/artifacts/<artifact_id>/download/audio
 
 # Download video
-curl -s http://localhost:8000/v1/notebooklm/notebooks/<id>/artifacts/<aid>/download/video
+curl -s http://localhost:8000/v1/notebooklm/artifacts/<artifact_id>/download/video
 ```
