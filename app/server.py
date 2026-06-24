@@ -13,9 +13,12 @@ from gemini_webapi import GeminiClient
 
 from notebooklm import NotebookLMClient
 
+from metaai_api import MetaAI
+
 from app.routers.deepseek import router as deepseek_router
 from app.routers.gemini import router as gemini_router
 from app.routers.notebooklm import router as notebooklm_router
+from app.routers.metaai import router as metaai_router
 
 
 @asynccontextmanager
@@ -26,8 +29,7 @@ async def lifespan(app: FastAPI):
     gemini_client = None
     if secure_1psid:
         gemini_client = GeminiClient(
-            secure_1psid=secure_1psid, secure_1psidts=secure_1psidts,
-        )
+            secure_1psid=secure_1psid, secure_1psidts=secure_1psidts,)
         try:
             await gemini_client.init(timeout=30, auto_close=False)
         except Exception as e:
@@ -51,6 +53,22 @@ async def lifespan(app: FastAPI):
         print(f"[NotebookLM] Storage path not found: {storage_path}", file=sys.stderr)
 
     app.state.notebooklm_client = notebooklm_client
+
+    # Meta AI
+    metaai_client = None
+    if os.environ.get("META_AI_DATR"):
+        try:
+            cookies = {}
+            for key, env_key in [("datr", "META_AI_DATR"), ("abra_sess", "META_AI_ABRA_SESS"), ("ecto_1_sess", "META_AI_ECTO_1_SESS")]:
+                val = os.environ.get(env_key)
+                if val:
+                    cookies[key] = val
+            metaai_client = MetaAI(cookies=cookies)
+        except Exception as e:
+            print(f"[MetaAI] Init failed: {e}", file=sys.stderr)
+            metaai_client = None
+
+    app.state.metaai_client = metaai_client
     yield
 
     if gemini_client:
@@ -63,10 +81,11 @@ app = FastAPI(
     title="Unofficial API Gateway",
     version="0.1.0",
     description=(
-        "OpenAI-compatible API for DeepSeek, Gemini, and NotebookLM.\n\n"
+        "OpenAI-compatible API for DeepSeek, Gemini, NotebookLM, and Meta AI.\n\n"
         "- **DeepSeek**: `deepseek-v3`, `deepseek-r1`, `deepseek-v4`, `deepseek-r4`\n"
         "- **Gemini**: `gemini-3-flash`, `gemini-3-pro`, `gemini-3-flash-thinking`, and more\n"
-        "- **NotebookLM**: `notebooklm-2-0` (source-grounded Q&A)\n\n"
+        "- **NotebookLM**: `notebooklm-2-0` (source-grounded Q&A)\n"
+        "- **Meta AI**: `llama-4` (chat, image generation, video generation)\n\n"
         "### Authentication\n"
         "Set environment variables in `.env` file before making requests."
     ),
@@ -76,16 +95,19 @@ app = FastAPI(
 app.include_router(deepseek_router, prefix="/v1/deepseek")
 app.include_router(gemini_router, prefix="/v1/gemini")
 app.include_router(notebooklm_router, prefix="/v1/notebooklm")
+app.include_router(metaai_router, prefix="/v1/metaai")
 
 
 @app.get("/health", summary="Health check", tags=["System"])
 def health():
     gemini_ok = getattr(app.state, "gemini_client", None) is not None
     notebooklm_ok = getattr(app.state, "notebooklm_client", None) is not None
+    metaai_ok = getattr(app.state, "metaai_client", None) is not None
     return {
         "status": "ok",
         "gemini_connected": gemini_ok,
         "notebooklm_connected": notebooklm_ok,
+        "metaai_connected": metaai_ok,
     }
 
 

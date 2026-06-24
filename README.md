@@ -2,7 +2,7 @@
 
 > **⚠️ Unofficial & Experimental**
 >
-> This project uses **undocumented, unofficial APIs** from DeepSeek, Google (Gemini), and Google (NotebookLM). These are **not officially supported** by any provider.
+> This project uses **undocumented, unofficial APIs** from DeepSeek, Google (Gemini), Google (NotebookLM), and Meta (Meta AI). These are **not officially supported** by any provider.
 >
 > - APIs can break or change without notice
 > - Rate limits and throttling apply
@@ -10,7 +10,7 @@
 > - **Not affiliated** with DeepSeek or Google
 > - For **prototypes, research, and personal projects** only
 
-OpenAI-compatible REST API for **DeepSeek**, **Gemini**, and **NotebookLM**.
+OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, and **Meta AI**.
 
 ## Getting Started
 
@@ -32,6 +32,7 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, and **NotebookLM**.
 | DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | None |
 | Gemini | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
 | NotebookLM | [`docs/notebooklm.md`](docs/notebooklm.md) | [Notebooks, Sources](docs/notebooklm.md#provider-specific-endpoints) |
+| Meta AI | [`docs/metaai.md`](docs/metaai.md) | [Image Gen, Video Gen](docs/metaai.md#provider-specific-endpoints) |
 
 ## Configuration
 
@@ -47,6 +48,9 @@ cp .env.example .env
 | `GEMINI_SECURE_1PSIDTS` | ❌ | Google `__Secure-1PSIDTS` cookie — [docs](docs/gemini.md) |
 | `NOTEBOOKLM_STORAGE_PATH` | ❌* | Path to `storage_state.json` — [docs](docs/notebooklm.md) |
 | `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` | ❌ | Default notebook for chat completions |
+| `META_AI_DATR` | ✅ | Meta AI `datr` cookie — [docs](docs/metaai.md) |
+| `META_AI_ECTO_1_SESS` | ❌ | Meta AI `ecto_1_sess` cookie — [docs](docs/metaai.md) |
+| `META_AI_ABRA_SESS` | ❌ | Meta AI `abra_sess` cookie — [docs](docs/metaai.md) |
 
 \*Required for NotebookLM endpoints.
 
@@ -74,16 +78,16 @@ docker compose down
 
 These share the same format across all providers.
 
-| Endpoint | Method | DeepSeek | Gemini | NotebookLM |
-|---|---|---|---|---|
-| `GET /v1/{provider}/models` | GET | ✅ | ✅ | ✅ |
-| `POST /v1/{provider}/chat/completions` | POST | ✅ | ✅ | ✅ |
+| Endpoint | Method | DeepSeek | Gemini | NotebookLM | Meta AI |
+|---|---|---|---|---|---|
+| `GET /v1/{provider}/models` | GET | ✅ | ✅ | ✅ | ✅ |
+| `POST /v1/{provider}/chat/completions` | POST | ✅ | ✅ | ✅ | ✅ |
 
 ### Request body
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `gemini-3-flash`, `notebooklm-2-0`) |
+| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `gemini-3-flash`, `notebooklm-2-0`, `llama-4`) |
 | `messages` | array | ✅ | — | `[{"role": "user", "content": "..."}]` |
 | `stream` | bool | ❌ | `false` | Enable SSE streaming |
 
@@ -120,7 +124,7 @@ data: [DONE]
 | NotebookLM | `notebook_id` | string | Target notebook |
 | NotebookLM | `source_ids` | array | Filter to specific sources |
 
-See each provider doc for details.
+See each provider doc for details. Meta AI also has [image generation](docs/metaai.md) and [video generation](docs/metaai.md) endpoints.
 
 ## System
 

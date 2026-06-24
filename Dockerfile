@@ -11,6 +11,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY app/ app/
 COPY deepseek-api/ deepseek-api/
 COPY Gemini-API/ Gemini-API/
+COPY metaai-api/ metaai-api/
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
