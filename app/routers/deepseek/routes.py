@@ -97,11 +97,18 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
         model_type=model_type,
     )
 
+    if result is None:
+        raise RuntimeError("DeepSeek returned no response. Check credentials or session.")
+
     if not isinstance(result, dict):
-        return {"response": str(result) if result else ""}
+        raise RuntimeError(f"Unexpected response type from DeepSeek: {result}")
 
     if not result.get("ok"):
-        return {"response": result.get("content", "Unknown error")}
+        # content may be bytes (raw HTTP error body) or string
+        err = result.get("content", "Unknown error")
+        if isinstance(err, (bytes, bytearray)):
+            err = err.decode("utf-8", errors="replace")
+        raise RuntimeError(f"DeepSeek error: {err}")
 
     content = result.get("content", {})
     if isinstance(content, dict):
