@@ -18,13 +18,12 @@ Or use **Cookie-Editor** extension to export all cookies at once.
 ## Model IDs
 
 | Model | Description |
-|---|---|
-| `deepseek-v3` | Fast responses without extended thinking |
-| `deepseek-r1` | Reasoning model with extended thinking |
-| `deepseek-v4` | Expert model without extended thinking |
-| `deepseek-r4` | Expert reasoning model with extended thinking |
-| `deepseek-v4-expert` | V4 with expert mode enabled |
-| `deepseek-r4-expert` | R4 with expert mode and extended thinking |
+|---|---|---|
+| `deepseek-v3` | Default model without extended thinking |
+| `deepseek-r1` | Default model with extended thinking |
+| `deepseek-v4` | Default model without extended thinking |
+| `deepseek-r4` | Default model with extended thinking |
+
 
 ## Endpoints
 

@@ -14,48 +14,41 @@ from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 router = APIRouter(tags=["DeepSeek"])
 
+DEEPSEEK_MODEL_CONFIG = {
+    "deepseek-v3": {"model_type": "default", "thinking": False},
+    "deepseek-r1": {"model_type": "default", "thinking": False},
+    "deepseek-v4": {"model_type": "default", "thinking": False},
+    "deepseek-r4": {"model_type": "default", "thinking": False},
+}
+
 DEEPSEEK_MODELS = [
     {
         "id": "deepseek-v3",
         "object": "model",
         "created": 1704067200,
         "owned_by": "deepseek",
-        "description": "DeepSeek V3 - Fast responses without extended thinking",
+        "description": "Default model without extended thinking",
     },
     {
         "id": "deepseek-r1",
         "object": "model",
         "created": 1704067200,
         "owned_by": "deepseek",
-        "description": "DeepSeek R1 - Reasoning model with extended thinking",
+        "description": "Default model with extended thinking",
     },
     {
         "id": "deepseek-v4",
         "object": "model",
         "created": 1704067200,
         "owned_by": "deepseek",
-        "description": "DeepSeek V4 - Expert model without extended thinking",
+        "description": "Default model without extended thinking",
     },
     {
         "id": "deepseek-r4",
         "object": "model",
         "created": 1704067200,
         "owned_by": "deepseek",
-        "description": "DeepSeek R4 - Expert reasoning model with extended thinking",
-    },
-    {
-        "id": "deepseek-v4-expert",
-        "object": "model",
-        "created": 1704067200,
-        "owned_by": "deepseek",
-        "description": "DeepSeek V4 Expert - Expert mode without extended thinking",
-    },
-    {
-        "id": "deepseek-r4-expert",
-        "object": "model",
-        "created": 1704067200,
-        "owned_by": "deepseek",
-        "description": "DeepSeek R4 Expert - Expert reasoning model with extended thinking",
+        "description": "Default model with extended thinking",
     },
 ]
 
@@ -73,16 +66,9 @@ def _get_auth():
 
 
 def _get_model_config(model: str):
-    model_lower = model.lower()
-    is_expert = "expert" in model_lower
-    model_type = "expert" if is_expert else "default"
-    thinking_enabled = "r1" in model_lower or "r4" in model_lower or "reasoning" in model_lower or "reasoner" in model_lower
-    # Normalize base model name for display
-    if is_expert:
-        base = model_lower.replace("-expert", "")
-    else:
-        base = model_lower
-    return model_type, thinking_enabled, base
+    key = model.lower()
+    config = DEEPSEEK_MODEL_CONFIG.get(key, DEEPSEEK_MODEL_CONFIG["deepseek-v3"])
+    return config["model_type"], config["thinking"], key
 
 
 def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> dict:
