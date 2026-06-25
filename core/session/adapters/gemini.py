@@ -3,6 +3,7 @@ from .base import BaseSessionAdapter
 
 logger = logging.getLogger(__name__)
 
+
 class GeminiAdapter(BaseSessionAdapter):
     @property
     def scope(self) -> str:
@@ -27,3 +28,9 @@ class GeminiAdapter(BaseSessionAdapter):
         if hasattr(response, 'session_state'):
             new_data['gemini_session_state'] = response.session_state
         return new_data
+
+    def clear_provider_session(self, data: dict) -> None:
+        data.pop('gemini_cid', None)
+        data.pop('gemini_session_state', None)
+        data.pop('gemini_metadata', None)
+        logger.debug('Cleared gemini provider session state')

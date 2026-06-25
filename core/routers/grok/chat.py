@@ -16,6 +16,8 @@ from .helpers import get_client
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
 from core.utils import extract_text
+from core.session.adapters import get_adapter
+from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
 
 def _resolve_mode_id(model_name: str) -> ModeId:
@@ -53,17 +55,27 @@ async def chat_completions(
 
     model = body.model or "grok-4.20-auto"
     mode_id = _resolve_mode_id(model)
-    messages = body.messages
+    messages = [m.model_dump() for m in body.messages]
     stream = body.stream
-    prompt = extract_text(messages[-1].content) if messages else ""
+    raw_prompt = extract_text(messages[-1].get("content")) if messages else ""
 
-    if not prompt:
+    if not raw_prompt:
         return JSONResponse({"error": "No prompt provided"}, status_code=400)
     logger.info("Request /v1/grok/chat/completions: %s", body.model_dump_json())
 
+    # Session integration
+    adapter = get_adapter("grok")
+    session_data = getattr(request.state, "session_data", {})
+
+    # Sync local history with incoming messages
+    sync_and_get_history(messages, session_data)
+    history = session_data.get("history", [])
+
+    prompt = format_prompt_with_history(history, raw_prompt)
+
     if stream:
         return StreamingResponse(
-            _stream_chat(client, model, prompt, mode_id),
+            _stream_chat(client, model, prompt, mode_id, session_data),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
@@ -72,6 +84,8 @@ async def chat_completions(
         result = await client.send_message(prompt, mode_id=mode_id)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+    append_assistant_message(session_data, result)
 
     return {
         "id": f"chatcmpl-{int(time.time())}",
@@ -93,7 +107,9 @@ async def chat_completions(
     }
 
 
-async def _stream_chat(client, model: str, prompt: str, mode_id: ModeId) -> AsyncGenerator[str, None]:
+async def _stream_chat(
+    client, model: str, prompt: str, mode_id: ModeId, session_data: dict
+) -> AsyncGenerator[str, None]:
     response_id = f"chatcmpl-{int(time.time())}"
     try:
         result = await client.send_message(prompt, mode_id=mode_id)
@@ -103,7 +119,9 @@ async def _stream_chat(client, model: str, prompt: str, mode_id: ModeId) -> Asyn
             first = False
         if not first:
             yield make_stream_chunk(model, "", response_id, is_final=True)
+        append_assistant_message(session_data, result)
         yield STREAM_END
     except Exception as e:
         yield make_error_chunk(str(e))
         yield STREAM_END
+

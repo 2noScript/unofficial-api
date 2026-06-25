@@ -15,6 +15,20 @@ from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
 from core.utils import extract_text
 from core.session.adapters import get_adapter
+from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
+
+
+def _build_chat_session(client: GeminiClient, session_data: dict) -> ChatSession:
+    """Create a ChatSession from stored session state, if any."""
+    metadata = session_data.get("gemini_metadata")
+    if metadata:
+        return ChatSession(geminiclient=client, metadata=metadata)
+    cid = session_data.get("gemini_cid", "")
+    return ChatSession(geminiclient=client, cid=cid)
+
+
+def _has_provider_session(session_data: dict) -> bool:
+    return bool(session_data.get("gemini_cid") or session_data.get("gemini_metadata"))
 
 
 @router.post(
@@ -36,7 +50,7 @@ async def chat_completions(
                 },
             }
         }
-    )
+    ),
 ):
     client = _require_client(request)
     if isinstance(client, JSONResponse):
@@ -47,85 +61,130 @@ async def chat_completions(
     model = body.model or "gemini-3-flash"
 
     resolved_model = _resolve_model_name(model)
-    prompt = extract_text(messages[-1].get("content")) if messages else ""
+    raw_prompt = extract_text(messages[-1].get("content")) if messages else ""
     logger.info("Request /v1/gemini/chat/completions: %s", body.model_dump_json())
 
     # Session integration
     adapter = get_adapter("gemini")
     session_data = getattr(request.state, "session_data", {})
-    session_args = adapter.inject(session_data, {})
-    
-    metadata = session_data.get("gemini_metadata")
-    if metadata:
-        chat = ChatSession(geminiclient=client, metadata=metadata)
-    else:
-        cid = session_args.get("chat_data", {}).get("cid") if "chat_data" in session_args else None
-        chat = ChatSession(geminiclient=client, cid=cid or "")
+
+    # Sync local history with incoming messages
+    sync_and_get_history(messages, session_data)
+    history = session_data.get("history", [])
 
     if stream:
         return StreamingResponse(
-            _stream_gemini(client, prompt, resolved_model, chat, session_data, adapter),
+            _stream_gemini(client, raw_prompt, resolved_model, session_data, adapter, history),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
-    try:
-        output = await client.generate_content(
-            prompt=prompt, model=resolved_model, chat=chat
-        )
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    # Non-streaming with retry-on-session-error
+    for attempt in range(2):
+        has_session = _has_provider_session(session_data) and attempt == 0
+        prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)
+        chat = _build_chat_session(client, session_data)
 
-    # Extract session data
-    session_data.update(adapter.extract(chat, session_data))
-    session_data["gemini_metadata"] = chat.metadata
+        try:
+            output = await client.generate_content(
+                prompt=prompt, model=resolved_model, chat=chat
+            )
+        except Exception as e:
+            err_str = str(e)
+            if attempt == 0 and _has_provider_session(session_data):
+                logger.warning("Gemini session error, resetting: %s", err_str)
+                adapter.clear_provider_session(session_data)
+                continue
+            return JSONResponse({"error": err_str}, status_code=500)
 
-    content = output.text or ""
-    thoughts = output.thoughts or ""
+        # Extract session data
+        session_data.update(adapter.extract(chat, session_data))
+        session_data["gemini_metadata"] = chat.metadata
 
-    response_data = {
-        "id": f"chatcmpl-{int(time.time())}",
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": resolved_model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": content},
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {
-            "prompt_tokens": 0,
-            "completion_tokens": len(content.split()) if content else 0,
-            "total_tokens": len(content.split()) if content else 0,
-        },
-    }
+        content = output.text or ""
+        thoughts = output.thoughts or ""
 
-    if thoughts:
-        response_data["choices"][0]["message"]["reasoning_content"] = thoughts
+        append_assistant_message(session_data, content)
 
-    return JSONResponse(response_data)
+        response_data = {
+            "id": f"chatcmpl-{int(time.time())}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": resolved_model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": len(content.split()) if content else 0,
+                "total_tokens": len(content.split()) if content else 0,
+            },
+        }
+
+        if thoughts:
+            response_data["choices"][0]["message"]["reasoning_content"] = thoughts
+
+        return JSONResponse(response_data)
+
+    return JSONResponse({"error": "Failed after retry"}, status_code=500)
 
 
 async def _stream_gemini(
-    client: GeminiClient, prompt: str, resolved_model: str, chat: ChatSession, session_data: dict, adapter
+    client: GeminiClient,
+    raw_prompt: str,
+    resolved_model: str,
+    session_data: dict,
+    adapter,
+    history: list[dict],
 ) -> AsyncGenerator[str, None]:
     response_id = f"chatcmpl-{int(time.time())}"
-    first = True
-    try:
-        gen = client.generate_content_stream(prompt=prompt, model=resolved_model, chat=chat)
-        async for chunk in gen:
-            delta = chunk.text_delta
-            if delta:
-                yield make_stream_chunk(resolved_model, delta, response_id, is_first=first)
-                first = False
+
+    for attempt in range(2):
+        has_session = _has_provider_session(session_data) and attempt == 0
+        prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)
+        chat = _build_chat_session(client, session_data)
+
+        first = True
+        collected = []
+        session_error = False
+
+        try:
+            gen = client.generate_content_stream(prompt=prompt, model=resolved_model, chat=chat)
+            async for chunk in gen:
+                delta = chunk.text_delta
+                if delta:
+                    collected.append(delta)
+                    yield make_stream_chunk(resolved_model, delta, response_id, is_first=first)
+                    first = False
+        except Exception as e:
+            err_str = str(e)
+            if attempt == 0 and _has_provider_session(session_data):
+                logger.warning("Gemini stream session error, resetting: %s", err_str)
+                adapter.clear_provider_session(session_data)
+                session_error = True
+            else:
+                yield make_error_chunk(err_str)
+                yield STREAM_END
+                return
+
+        if session_error:
+            continue  # retry with fresh session + history transcript
+
+        # Success
         if not first:
             yield make_stream_chunk(resolved_model, "", response_id, is_final=True)
-        # Extract session data after successful stream completion
+
         session_data.update(adapter.extract(chat, session_data))
         session_data["gemini_metadata"] = chat.metadata
+        full_text = "".join(collected)
+        append_assistant_message(session_data, full_text)
+
         yield STREAM_END
-    except Exception as e:
-        yield make_error_chunk(str(e))
-        yield STREAM_END
+        return
+
+    yield make_error_chunk("Gemini session failed after retry")
+    yield STREAM_END

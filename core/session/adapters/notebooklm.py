@@ -3,6 +3,7 @@ from .base import BaseSessionAdapter
 
 logger = logging.getLogger(__name__)
 
+
 class NotebookLMAdapter(BaseSessionAdapter):
     @property
     def scope(self) -> str:
@@ -22,3 +23,7 @@ class NotebookLMAdapter(BaseSessionAdapter):
             new_data['notebooklm_conversation_id'] = response.conversation_id
             logger.debug('Extracted notebooklm conversation_id: %s', response.conversation_id[:20])
         return new_data
+
+    def clear_provider_session(self, data: dict) -> None:
+        data.pop('notebooklm_conversation_id', None)
+        logger.debug('Cleared notebooklm provider session state')

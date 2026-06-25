@@ -9,6 +9,16 @@ logger = logging.getLogger(__name__)
 
 CHAT_PATHS = {'/chat/completions'}
 
+async def session_saving_generator(iterator, store):
+    try:
+        async for chunk in iterator:
+            yield chunk
+    finally:
+        try:
+            store._save_to_disk()
+        except Exception as e:
+            logger.error("Failed to save session to disk in streaming middleware: %s", e)
+
 class VirtualSessionMiddleware:
     def __init__(self, store: VirtualSessionStore, manager: VirtualSessionManager, validate_key_fn, get_key_hash_fn, extract_provider_fn):
         self.store = store
@@ -92,4 +102,14 @@ class VirtualSessionMiddleware:
         
         response = await call_next(request)
         response.headers['X-Session-Id'] = vid
+        
+        # Automatically save session to disk on completion
+        if hasattr(response, 'body_iterator'):
+            response.body_iterator = session_saving_generator(response.body_iterator, self.store)
+        else:
+            try:
+                self.store._save_to_disk()
+            except Exception as e:
+                logger.error("Failed to save session to disk: %s", e)
+                
         return response

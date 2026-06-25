@@ -71,17 +71,18 @@ class VirtualSessionStore:
         """Persist current (already-cleaned) in-memory state to disk."""
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
-            payload = {
-                'sessions': {
-                    vid: {
-                        'data': rec.data,
-                        'last_used': rec.last_used,
-                        'api_key_hash': rec.api_key_hash,
-                    }
-                    for vid, rec in self._sessions.items()
-                },
-                'assistant_cache': dict(self._assistant_cache),
-            }
+            with self._lock:
+                payload = {
+                    'sessions': {
+                        vid: {
+                            'data': rec.data,
+                            'last_used': rec.last_used,
+                            'api_key_hash': rec.api_key_hash,
+                        }
+                        for vid, rec in self._sessions.items()
+                    },
+                    'assistant_cache': dict(self._assistant_cache),
+                }
             SESSIONS_FILE.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
         except Exception as e:
             logger.warning('Failed to save sessions to disk: %s', e)

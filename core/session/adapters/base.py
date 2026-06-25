@@ -8,3 +8,7 @@ class BaseSessionAdapter:
 
     def extract(self, response, data: dict) -> dict:
         return data
+
+    def clear_provider_session(self, data: dict) -> None:
+        """Override to clear provider-specific session keys on session reset."""
+        pass
