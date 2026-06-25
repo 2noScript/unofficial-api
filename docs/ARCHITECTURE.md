@@ -31,7 +31,7 @@ unofficial-api/
 │       ├── deepseek/           # 2 routes (models, chat/completions)
 │       │   ├── __init__.py
 │       │   ├── router.py       # APIRouter instance, imported by server
-│       │   └── routes.py       # Endpoint handlers
+│       │   └── route.py        # Endpoint handlers
 │       ├── gemini/             # 2 routes
 │       │   ├── __init__.py
 │       │   ├── router.py
@@ -207,6 +207,14 @@ Cookies expire. When requests start returning auth errors, re-extract and restar
 ## Vendor SDKs
 
 Five vendored SDK directories exist at the project root. They are standalone git repos (not submodules).
+
+| SDK | Provider | Repository |
+|---|---|---|
+| `deepseek-api/` | DeepSeek | [2noScript/deepseek-api](https://github.com/2noScript/deepseek-api) |
+| `Gemini-API/` | Gemini (Google) | [HanaokaYuzu/Gemini-API](https://github.com/HanaokaYuzu/Gemini-API) |
+| `grok2api/` | Grok (xAI) | [2noScript/grok2api](https://github.com/2noScript/grok2api) |
+| `notebooklm-py/` | NotebookLM (Google) | [2noScript/notebooklm-py](https://github.com/2noScript/notebooklm-py) |
+| `metaai-api/` | Meta AI | [2noScript/metaai-api](https://github.com/2noScript/metaai-api) |
 
 ### `sys.path` inclusion (no pip needed)
 
