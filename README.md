@@ -56,8 +56,7 @@ cp .env.example .env
 | `META_AI_DATR` | ✅ | Meta AI `datr` cookie — [docs](docs/metaai.md) |
 | `META_AI_ECTO_1_SESS` | ❌ | Meta AI `ecto_1_sess` cookie — [docs](docs/metaai.md) |
 | `META_AI_ABRA_SESS` | ❌ | Meta AI `abra_sess` cookie — [docs](docs/metaai.md) |
-| `GROK_SSO` | ✅ | Grok `sso` cookie — [docs](docs/grok.md) |
-| `GROK_SSO_RW` | ✅ | Grok `sso-rw` cookie — [docs](docs/grok.md) |
+| `GROK_PROXY_CF_COOKIES`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | ✅ | Grok cookies + config — [docs](docs/grok.md) |
 
 \*Required for NotebookLM endpoints. `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` required for chat completions.
 

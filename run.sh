@@ -6,4 +6,4 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-uv run uvicorn app.server:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn core.server:app --host 0.0.0.0 --port 8000 --reload

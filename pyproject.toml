@@ -22,7 +22,8 @@ dependencies = [
 notebooklm-py = { path = "notebooklm-py" }
 
 # How SDKs are included:
-#   sys.path in server.py (no pip): DeepSeek, Gemini, Meta AI
-#   pip local path: Grok (importlib.metadata.version), NotebookLM (vendored)
+#   sys.path in server.py: DeepSeek (deepseek-api/), Gemini (Gemini-API/src/),
+#                          Meta AI (metaai-api/src/), Grok (grok2api/)
+#   pip local path: NotebookLM (notebooklm-py)
 [dependency-groups]
 dev = []

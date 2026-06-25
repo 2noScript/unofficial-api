@@ -8,6 +8,7 @@ load_dotenv()
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API/src"))
 sys.path.insert(0, os.path.join(BASE, "..", "metaai-api", "src"))
+sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -76,10 +77,14 @@ async def lifespan(app: FastAPI):
 
     # Grok
     grok_client = None
-    grok_cookies_str = os.environ.get("GROK_COOKIES_STR")
+    grok_cookies_str = os.environ.get("GROK_PROXY_CF_COOKIES")
     if grok_cookies_str:
         try:
-            grok_client = GrokClient(cookies_str=grok_cookies_str)
+            grok_client = GrokClient(
+                cookies_str=grok_cookies_str,
+                user_agent=os.environ.get("GROK_PROXY_USER_AGENT", ""),
+                browser=os.environ.get("GROK_PROXY_BROWSER", ""),
+            )
         except Exception as e:
             print(f"[Grok] Init failed: {e}", file=sys.stderr)
             grok_client = None
@@ -102,7 +107,7 @@ app = FastAPI(
         "- **Gemini**: `gemini-3-flash`, `gemini-3-pro`, `gemini-3-flash-thinking`, and more\n"
         "- **NotebookLM**: `notebooklm-2-0` (source-grounded Q&A)\n"
         "- **Meta AI**: `llama-4` (chat, image generation, video generation)\n"
-        "- **Grok**: `grok-3` (chat with optional web search)\n\n"
+        "- **Grok**: `grok-4.20-auto`, `grok-4.20-fast`, `grok-4.20-reasoning`, `grok-4.3-beta`, and more (15+ models)\n\n"
         "### Authentication\n"
         "Set environment variables in `.env` file before making requests."
     ),
