@@ -5,4 +5,10 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    volumes:
+      - unofficial-api-data:/data
     restart: unless-stopped
+
+volumes:
+  unofficial-api-data:
+

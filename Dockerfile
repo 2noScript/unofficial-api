@@ -16,6 +16,11 @@ COPY metaai-api/ metaai-api/
 COPY grok2api/ grok2api/
 COPY notebooklm-py/ notebooklm-py/
 
+# Persistent data directory for API keys and machine_id
+RUN mkdir -p /data
+ENV UNOFFICIAL_API_DATA_DIR=/data
+
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 CMD ["uvicorn", "core.server:app", "--host", "0.0.0.0", "--port", "8000"]
+
