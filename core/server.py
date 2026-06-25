@@ -10,6 +10,9 @@ sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API/src"))
 sys.path.insert(0, os.path.join(BASE, "..", "metaai-api", "src"))
 sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
 
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, RedirectResponse
 from gemini_webapi import GeminiClient

@@ -3,7 +3,10 @@ import sys
 import json
 import time
 import asyncio
+import logging
 from typing import AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "deepseek-api"))
 
@@ -11,6 +14,8 @@ from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
+from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
+from core.utils import extract_text
 
 router = APIRouter(tags=["DeepSeek"])
 
@@ -71,11 +76,20 @@ def _get_model_config(model: str):
     return config["model_type"], config["thinking"], key
 
 
+def _parse_deepseek_error(err: str) -> tuple[int, str]:
+    import re
+    m = re.match(r"HTTP (\d+): (.+)", err)
+    if m:
+        return int(m.group(1)), m.group(2).strip()
+    return 500, err
+
+
 def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> dict:
     ds_session_id, auth_token = _get_auth()
-    user_message = messages[-1].content if messages else ""
+    user_message = extract_text(messages[-1].content) if messages else ""
 
     last_error: str = "Unknown error"
+    last_status: int = 500
 
     for attempt in range(2):  # retry once for WASM warm-up on first call
         chat = DeepSeekChat(ds_session_id, auth_token)
@@ -86,10 +100,6 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
             model_type=model_type,
         )
 
-        if result is None:
-            last_error = "DeepSeek returned no response. Check credentials or session."
-            continue
-
         if not isinstance(result, dict):
             last_error = f"Unexpected response type from DeepSeek: {result}"
             continue
@@ -98,7 +108,7 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
             err = result.get("content", "Unknown error")
             if isinstance(err, (bytes, bytearray)):
                 err = err.decode("utf-8", errors="replace")
-            last_error = f"DeepSeek error: {err}"
+            last_status, last_error = _parse_deepseek_error(err)
             continue
 
         # success
@@ -107,27 +117,33 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
             return content
         return {"response": str(content)}
 
+    if last_status in (401, 403):
+        raise ValueError(last_error)
     raise RuntimeError(last_error)
 
 
-async def _stream_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
+async def _stream_chat(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
+    response_id = f"chatcmpl-{int(time.time())}"
     try:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None, _run_chat, messages, model_type, thinking_enabled, search_enabled
         )
         text = result.get("response", "")
+        first = True
         for line in text.split("\n"):
             if line.strip():
-                chunk = json.dumps({"choices": [{"delta": {"content": line + "\n"}}]}, ensure_ascii=False)
-                yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
+                yield make_stream_chunk(model, line + "\n", response_id, is_first=first)
+                first = False
+        if not first:
+            yield make_stream_chunk(model, "", response_id, is_final=True)
+        yield STREAM_END
     except ValueError as e:
-        data = json.dumps({"error": str(e)}, ensure_ascii=False)
-        yield f"data: {data}\n\n"
+        yield make_error_chunk(str(e), "authentication_error", "invalid_credentials")
+        yield STREAM_END
     except Exception as e:
-        data = json.dumps({"error": str(e)}, ensure_ascii=False)
-        yield f"data: {data}\n\n"
+        yield make_error_chunk(str(e), "server_error", "upstream_error")
+        yield STREAM_END
 
 
 @router.get("/models", summary="List available DeepSeek models")
@@ -160,11 +176,12 @@ async def chat_completions(
     model = body.model or "deepseek-v3"
 
     model_type, thinking_enabled, _ = _get_model_config(model)
+    logger.info("Request /v1/deepseek/chat/completions: %s", body.model_dump_json())
 
     try:
         if stream:
             return StreamingResponse(
-                _stream_chat(messages, model_type, thinking_enabled, False),
+                _stream_chat(messages, model, model_type, thinking_enabled, False),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
@@ -174,9 +191,15 @@ async def chat_completions(
             None, _run_chat, messages, model_type, thinking_enabled, False
         )
     except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=401)
+        return JSONResponse(
+            {"error": {"message": str(e), "type": "authentication_error", "code": "invalid_credentials"}},
+            status_code=401,
+        )
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"error": {"message": str(e), "type": "server_error", "code": "upstream_error"}},
+            status_code=500,
+        )
 
     response_text = result.get("response", "")
     thought = result.get("thought")
@@ -202,6 +225,4 @@ async def chat_completions(
             "completion_tokens": len(response_text.split()) if response_text else 0,
             "total_tokens": len(response_text.split()) if response_text else 0,
         },
-        "citation": result.get("citation"),
-        "title": result.get("title"),
     }

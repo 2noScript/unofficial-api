@@ -1,6 +1,9 @@
 import json
 import time
+import logging
 from typing import AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -11,6 +14,8 @@ from app.control.model.registry import get as get_model_spec
 from .router import router
 from .helpers import get_client
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
+from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
+from core.utils import extract_text
 
 
 def _resolve_mode_id(model_name: str) -> ModeId:
@@ -50,14 +55,15 @@ async def chat_completions(
     mode_id = _resolve_mode_id(model)
     messages = body.messages
     stream = body.stream
-    prompt = messages[-1].content if messages else ""
+    prompt = extract_text(messages[-1].content) if messages else ""
 
     if not prompt:
         return JSONResponse({"error": "No prompt provided"}, status_code=400)
+    logger.info("Request /v1/grok/chat/completions: %s", body.model_dump_json())
 
     if stream:
         return StreamingResponse(
-            _stream_chat(client, prompt, mode_id),
+            _stream_chat(client, model, prompt, mode_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
@@ -87,13 +93,17 @@ async def chat_completions(
     }
 
 
-async def _stream_chat(client, prompt: str, mode_id: ModeId) -> AsyncGenerator[str, None]:
+async def _stream_chat(client, model: str, prompt: str, mode_id: ModeId) -> AsyncGenerator[str, None]:
+    response_id = f"chatcmpl-{int(time.time())}"
     try:
         result = await client.send_message(prompt, mode_id=mode_id)
+        first = True
         for token in result.split():
-            chunk = json.dumps({"choices": [{"delta": {"content": token + " "}}]}, ensure_ascii=False)
-            yield f"data: {chunk}\n\n"
+            yield make_stream_chunk(model, token + " ", response_id, is_first=first)
+            first = False
+        if not first:
+            yield make_stream_chunk(model, "", response_id, is_final=True)
+        yield STREAM_END
     except Exception as e:
-        data = json.dumps({"error": str(e)}, ensure_ascii=False)
-        yield f"data: {data}\n\n"
-    yield "data: [DONE]\n\n"
+        yield make_error_chunk(str(e))
+        yield STREAM_END

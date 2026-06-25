@@ -1,7 +1,10 @@
 import os
 import json
 import time
+import logging
 from typing import AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -17,6 +20,8 @@ from core.schemas import (
     NLMChatReferenceResponse,
     NLMChatTurnResponse,
 )
+from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
+from core.utils import extract_text
 
 from .router import router
 from .helpers import _require_client
@@ -62,13 +67,14 @@ async def chat_completions(
     messages = body.messages
     stream = body.stream
 
-    question = messages[-1].content if messages else ""
+    question = extract_text(messages[-1].content) if messages else ""
     if not question:
         return JSONResponse({"error": "No question provided"}, status_code=400)
+    logger.info("Request /v1/notebooklm/chat/completions: %s", body.model_dump_json())
 
     if stream:
         return StreamingResponse(
-            _stream_chat(client, notebook_id, question),
+            _stream_chat(client, "notebooklm-2-0", notebook_id, question),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
@@ -115,21 +121,25 @@ async def chat_completions(
 
 
 async def _stream_chat(
-    client: NotebookLMClient, notebook_id: str, question: str
+    client: NotebookLMClient, model: str, notebook_id: str, question: str
 ) -> AsyncGenerator[str, None]:
+    response_id = f"chatcmpl-{int(time.time())}"
     try:
         result = await client.chat.ask(
             notebook_id=notebook_id, question=question
         )
         answer = result.answer or ""
+        first = True
         for line in answer.split("\n"):
             if line:
-                chunk = json.dumps({"choices": [{"delta": {"content": line + "\n"}}]}, ensure_ascii=False)
-                yield f"data: {chunk}\n\n"
+                yield make_stream_chunk(model, line + "\n", response_id, is_first=first)
+                first = False
+        if not first:
+            yield make_stream_chunk(model, "", response_id, is_final=True)
+        yield STREAM_END
     except Exception as e:
-        data = json.dumps({"error": str(e)}, ensure_ascii=False)
-        yield f"data: {data}\n\n"
-    yield "data: [DONE]\n\n"
+        yield make_error_chunk(str(e))
+        yield STREAM_END
 
 
 @router.get(

@@ -2,15 +2,17 @@ from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
+    model_config = {"extra": "ignore"}
     role: str = Field(
         ..., description="Role of the message", examples=["user", "assistant"]
     )
-    content: str = Field(
-        ..., description="Content of the message", examples=["Hello!", "Tell me about AI"]
+    content: str | list | None = Field(
+        None, description="Content of the message", examples=["Hello!", "Tell me about AI"]
     )
 
 
 class ChatCompletionRequest(BaseModel):
+    model_config = {"extra": "ignore"}
     model: str = Field(
         ...,
         description="Model ID to use",
@@ -62,6 +64,7 @@ class NLMChatReferenceResponse(BaseModel):
 
 
 class ChatCompletionResponse(BaseModel):
+    model_config = {"extra": "ignore"}
     id: str = Field(..., description="Unique chat completion ID", examples=["chatcmpl-1234567890"])
     object: str = Field("chat.completion", description="Object type")
     created: int = Field(..., description="Unix timestamp of creation")
