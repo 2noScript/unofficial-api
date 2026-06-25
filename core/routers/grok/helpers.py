@@ -1,14 +1,6 @@
-import os
-import sys
-from concurrent.futures import ThreadPoolExecutor
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "GrokWeb-to-API"))
-
 from fastapi import Request
-from grok_client import GrokClient
+from .client import GrokClient
 
-
-_executor = ThreadPoolExecutor(max_workers=4)
 
 GROK_MODELS = [
     {

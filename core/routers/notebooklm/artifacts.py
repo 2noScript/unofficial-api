@@ -12,7 +12,7 @@ from notebooklm.rpc.types import (
     VideoStyle,
 )
 
-from app.schemas import (
+from core.schemas import (
     NLMArtifactDownloadUrlResponse,
     NLMAudioGenerateRequest,
     NLMGenerateRequest,

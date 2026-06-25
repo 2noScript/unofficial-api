@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
-from app.schemas import (
+from core.schemas import (
     NLMSourceAddDriveRequest,
     NLMSourceAddTextRequest,
     NLMSourceAddUrlRequest,

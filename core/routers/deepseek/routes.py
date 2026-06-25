@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
-from app.schemas import ChatCompletionRequest, ChatCompletionResponse
+from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 router = APIRouter(tags=["DeepSeek"])
 

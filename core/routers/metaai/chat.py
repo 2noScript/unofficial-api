@@ -11,7 +11,7 @@ from metaai_api import MetaAI
 
 from .router import router
 from .helpers import get_client, _executor
-from app.schemas import ChatCompletionRequest, ChatCompletionResponse
+from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 
 @router.post(

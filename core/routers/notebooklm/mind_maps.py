@@ -2,7 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from notebooklm.types import MindMapKind
 
-from app.schemas import (
+from core.schemas import (
     NLMMindMapGenerateRequest,
     NLMMindMapListResponse,
     NLMMindMapRenameRequest,

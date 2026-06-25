@@ -1,5 +1,5 @@
 from fastapi import Request
-from app.schemas import ModelList
+from core.schemas import ModelList
 
 from .router import router
 from .helpers import _get_client, _build_model_list

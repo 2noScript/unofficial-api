@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.schemas import NLMNoteCreateRequest, NLMNoteListResponse, NLMNoteResponse, NLMNoteUpdateRequest
+from core.schemas import NLMNoteCreateRequest, NLMNoteListResponse, NLMNoteResponse, NLMNoteUpdateRequest
 
 from .router import router
 from .helpers import _require_client

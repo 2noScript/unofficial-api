@@ -8,7 +8,6 @@ load_dotenv()
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API/src"))
 sys.path.insert(0, os.path.join(BASE, "..", "metaai-api", "src"))
-sys.path.insert(0, os.path.join(BASE, "..", "GrokWeb-to-API"))
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -17,13 +16,13 @@ from gemini_webapi import GeminiClient
 from notebooklm import NotebookLMClient
 
 from metaai_api import MetaAI
-from grok_client import GrokClient
+from core.routers.grok.client import GrokClient
 
-from app.routers.deepseek import router as deepseek_router
-from app.routers.gemini import router as gemini_router
-from app.routers.notebooklm import router as notebooklm_router
-from app.routers.metaai import router as metaai_router
-from app.routers.grok import router as grok_router
+from core.routers.deepseek import router as deepseek_router
+from core.routers.gemini import router as gemini_router
+from core.routers.notebooklm import router as notebooklm_router
+from core.routers.metaai import router as metaai_router
+from core.routers.grok import router as grok_router
 
 
 @asynccontextmanager
@@ -77,11 +76,10 @@ async def lifespan(app: FastAPI):
 
     # Grok
     grok_client = None
-    sso = os.environ.get("GROK_SSO")
-    sso_rw = os.environ.get("GROK_SSO_RW")
-    if sso and sso_rw:
+    grok_cookies_str = os.environ.get("GROK_COOKIES_STR")
+    if grok_cookies_str:
         try:
-            grok_client = GrokClient(cookies={"sso": sso, "sso-rw": sso_rw})
+            grok_client = GrokClient(cookies_str=grok_cookies_str)
         except Exception as e:
             print(f"[Grok] Init failed: {e}", file=sys.stderr)
             grok_client = None
@@ -140,4 +138,4 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("core.server:app", host="0.0.0.0", port=8000, reload=True)

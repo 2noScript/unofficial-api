@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from notebooklm import NotebookLMClient
 from notebooklm.types import ChatGoal, ChatMode, ChatResponseLength
 
-from app.schemas import (
+from core.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     NLMChatConfigureRequest,

@@ -8,7 +8,7 @@ from gemini_webapi import GeminiClient
 
 from .router import router
 from .helpers import _require_client, _resolve_model_name
-from app.schemas import ChatCompletionRequest, ChatCompletionResponse
+from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 
 @router.post(

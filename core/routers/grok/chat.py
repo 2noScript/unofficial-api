@@ -1,14 +1,13 @@
 import json
 import time
-import asyncio
 from typing import AsyncGenerator
 
 from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .router import router
-from .helpers import get_client, _executor
-from app.schemas import ChatCompletionRequest, ChatCompletionResponse
+from .helpers import get_client
+from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 
 
 @router.post(
@@ -34,7 +33,7 @@ async def chat_completions(
     client = get_client(request)
     if not client:
         return JSONResponse(
-            {"error": "Grok client not initialized. Set GROK_SSO and GROK_SSO_RW in .env."},
+            {"error": "Grok client not initialized. Set GROK_COOKIES_STR in .env."},
             status_code=503,
         )
 
@@ -53,8 +52,7 @@ async def chat_completions(
         )
 
     try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(_executor, _run_chat, client, prompt)
+        result = await client.send_message(prompt)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -78,14 +76,9 @@ async def chat_completions(
     }
 
 
-def _run_chat(client, prompt: str) -> str:
-    return client.send_message(message=prompt)
-
-
 async def _stream_chat(client, prompt: str) -> AsyncGenerator[str, None]:
     try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(_executor, _run_chat, client, prompt)
+        result = await client.send_message(prompt)
         for token in result.split():
             chunk = json.dumps({"choices": [{"delta": {"content": token + " "}}]})
             yield f"data: {chunk}\n\n"

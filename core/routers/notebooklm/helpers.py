@@ -2,7 +2,7 @@ from fastapi import Request
 from notebooklm import NotebookLMClient
 from notebooklm.types import Artifact, GenerationStatus
 
-from app.schemas import (
+from core.schemas import (
     NLMArtifactResponse,
     NLMGenerationStatusResponse,
 )

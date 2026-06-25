@@ -2,7 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from notebooklm.types import ResearchSource
 
-from app.schemas import (
+from core.schemas import (
     NLMResearchImportRequest,
     NLMResearchImportResponse,
     NLMResearchSourceResponse,

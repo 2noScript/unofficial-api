@@ -8,7 +8,6 @@ dependencies = [
     "beautifulsoup4>=4.9.0",
     "curl-cffi>=0.15.0",
     "fastapi[standard]>=0.138.0",
-    "grokweb-to-api",
     "loguru>=0.7.3",
     "lxml-html-clean>=0.1.1",
     "notebooklm-py",
@@ -20,7 +19,6 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-grokweb-to-api = { path = "GrokWeb-to-API" }
 notebooklm-py = { path = "notebooklm-py" }
 
 # How SDKs are included:
