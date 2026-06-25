@@ -41,6 +41,7 @@ async def chat_completions(
                 "value": {
                     "model": "notebooklm-2-0",
                     "messages": [{"role": "user", "content": "Summarize the sources"}],
+                    "stream": False,
                 },
             }
         }

@@ -163,6 +163,7 @@ async def chat_completions(
                 "value": {
                     "model": "deepseek-v3",
                     "messages": [{"role": "user", "content": "Hello!"}],
+                    "stream": False,
                 },
             }
         }

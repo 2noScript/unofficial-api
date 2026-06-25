@@ -33,6 +33,7 @@ async def chat_completions(
                 "value": {
                     "model": "grok-4.20-auto",
                     "messages": [{"role": "user", "content": "Hello!"}],
+                    "stream": False,
                 },
             }
         }

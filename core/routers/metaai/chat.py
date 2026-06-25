@@ -29,6 +29,7 @@ async def chat_completions(
                 "value": {
                     "model": "llama-4",
                     "messages": [{"role": "user", "content": "Hello!"}],
+                    "stream": False,
                 },
             }
         }

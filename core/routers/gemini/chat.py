@@ -26,6 +26,7 @@ async def chat_completions(
                 "value": {
                     "model": "gemini-3-flash",
                     "messages": [{"role": "user", "content": "Hello!"}],
+                    "stream": False,
                 },
             }
         }
