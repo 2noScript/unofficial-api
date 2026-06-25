@@ -10,12 +10,13 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "deepseek-api"))
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
 from core.utils import extract_text
+from core.session.adapters import get_adapter
 
 router = APIRouter(tags=["DeepSeek"])
 
@@ -84,7 +85,7 @@ def _parse_deepseek_error(err: str) -> tuple[int, str]:
     return 500, err
 
 
-def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool) -> dict:
+def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_enabled: bool, session_data: dict, adapter) -> dict:
     ds_session_id, auth_token = _get_auth()
     user_message = extract_text(messages[-1].content) if messages else ""
 
@@ -93,6 +94,8 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
 
     for attempt in range(2):  # retry once for WASM warm-up on first call
         chat = DeepSeekChat(ds_session_id, auth_token)
+        adapter.inject(session_data, {'chat': chat})
+        
         result = chat.send_message(
             user_message,
             thinking_enabled=thinking_enabled,
@@ -112,6 +115,8 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
             continue
 
         # success
+        session_data.update(adapter.extract({'_chat_instance': chat}, session_data))
+        
         content = result.get("content", {})
         if isinstance(content, dict):
             return content
@@ -122,12 +127,12 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
     raise RuntimeError(last_error)
 
 
-async def _stream_chat_fake(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
+async def _stream_chat_fake(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool, session_data: dict, adapter) -> AsyncGenerator[str, None]:
     response_id = f"chatcmpl-{int(time.time())}"
     try:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            None, _run_chat, messages, model_type, thinking_enabled, search_enabled
+            None, _run_chat, messages, model_type, thinking_enabled, search_enabled, session_data, adapter
         )
         text = result.get("response", "")
         first = True
@@ -146,7 +151,7 @@ async def _stream_chat_fake(messages: list, model: str, model_type: str, thinkin
         yield STREAM_END
 
 
-async def _stream_chat_real(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
+async def _stream_chat_real(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool, session_data: dict, adapter) -> AsyncGenerator[str, None]:
     try:
         ds_session_id, auth_token = _get_auth()
         user_message = extract_text(messages[-1].content) if messages else ""
@@ -164,6 +169,8 @@ async def _stream_chat_real(messages: list, model: str, model_type: str, thinkin
             for attempt in range(2):
                 try:
                     chat = DeepSeekChat(ds_session_id, auth_token)
+                    adapter.inject(session_data, {'chat': chat})
+                    
                     result = chat.send_message(
                         user_message,
                         thinking_enabled=thinking_enabled,
@@ -172,6 +179,7 @@ async def _stream_chat_real(messages: list, model: str, model_type: str, thinkin
                         text_callback=on_text,
                     )
                     if result.get("ok"):
+                        session_data.update(adapter.extract({'_chat_instance': chat}, session_data))
                         return result
                     logger.warning("DeepSeek send attempt %d failed", attempt + 1)
                 except Exception as e:
@@ -231,6 +239,7 @@ async def list_models():
     response_model_exclude_none=True,
 )
 async def chat_completions(
+    request: Request,
     body: ChatCompletionRequest = Body(
         openapi_examples={
             "basic": {
@@ -251,17 +260,21 @@ async def chat_completions(
     model_type, thinking_enabled, _ = _get_model_config(model)
     logger.info("Request /v1/deepseek/chat/completions: %s", body.model_dump_json())
 
+    # Session integration
+    adapter = get_adapter("deepseek")
+    session_data = getattr(request.state, "session_data", {})
+
     try:
         if stream:
             return StreamingResponse(
-                _stream_chat_real(messages, model, model_type, thinking_enabled, False),
+                _stream_chat_real(messages, model, model_type, thinking_enabled, False, session_data, adapter),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            None, _run_chat, messages, model_type, thinking_enabled, False
+            None, _run_chat, messages, model_type, thinking_enabled, False, session_data, adapter
         )
     except ValueError as e:
         return JSONResponse(

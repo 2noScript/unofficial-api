@@ -7,13 +7,14 @@ logger = logging.getLogger(__name__)
 
 from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
-from gemini_webapi import GeminiClient
+from gemini_webapi import GeminiClient, ChatSession
 
 from .router import router
 from .helpers import _require_client, _resolve_model_name
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
 from core.utils import extract_text
+from core.session.adapters import get_adapter
 
 
 @router.post(
@@ -49,19 +50,35 @@ async def chat_completions(
     prompt = extract_text(messages[-1].get("content")) if messages else ""
     logger.info("Request /v1/gemini/chat/completions: %s", body.model_dump_json())
 
+    # Session integration
+    adapter = get_adapter("gemini")
+    session_data = getattr(request.state, "session_data", {})
+    session_args = adapter.inject(session_data, {})
+    
+    metadata = session_data.get("gemini_metadata")
+    if metadata:
+        chat = ChatSession(geminiclient=client, metadata=metadata)
+    else:
+        cid = session_args.get("chat_data", {}).get("cid") if "chat_data" in session_args else None
+        chat = ChatSession(geminiclient=client, cid=cid or "")
+
     if stream:
         return StreamingResponse(
-            _stream_gemini(client, prompt, resolved_model),
+            _stream_gemini(client, prompt, resolved_model, chat, session_data, adapter),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     try:
         output = await client.generate_content(
-            prompt=prompt, model=resolved_model
+            prompt=prompt, model=resolved_model, chat=chat
         )
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+    # Extract session data
+    session_data.update(adapter.extract(chat, session_data))
+    session_data["gemini_metadata"] = chat.metadata
 
     content = output.text or ""
     thoughts = output.thoughts or ""
@@ -92,12 +109,12 @@ async def chat_completions(
 
 
 async def _stream_gemini(
-    client: GeminiClient, prompt: str, resolved_model: str
+    client: GeminiClient, prompt: str, resolved_model: str, chat: ChatSession, session_data: dict, adapter
 ) -> AsyncGenerator[str, None]:
     response_id = f"chatcmpl-{int(time.time())}"
     first = True
     try:
-        gen = client.generate_content_stream(prompt=prompt, model=resolved_model)
+        gen = client.generate_content_stream(prompt=prompt, model=resolved_model, chat=chat)
         async for chunk in gen:
             delta = chunk.text_delta
             if delta:
@@ -105,6 +122,9 @@ async def _stream_gemini(
                 first = False
         if not first:
             yield make_stream_chunk(resolved_model, "", response_id, is_final=True)
+        # Extract session data after successful stream completion
+        session_data.update(adapter.extract(chat, session_data))
+        session_data["gemini_metadata"] = chat.metadata
         yield STREAM_END
     except Exception as e:
         yield make_error_chunk(str(e))

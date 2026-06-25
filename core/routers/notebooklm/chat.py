@@ -25,6 +25,7 @@ from core.utils import extract_text
 
 from .router import router
 from .helpers import _require_client
+from core.session.adapters import get_adapter
 
 
 def _require_notebook_id() -> str | None:
@@ -72,17 +73,25 @@ async def chat_completions(
         return JSONResponse({"error": "No question provided"}, status_code=400)
     logger.info("Request /v1/notebooklm/chat/completions: %s", body.model_dump_json())
 
+    # Session integration
+    adapter = get_adapter("notebooklm")
+    session_data = getattr(request.state, "session_data", {})
+    session_args = adapter.inject(session_data, {})
+
     if stream:
         return StreamingResponse(
-            _stream_chat(client, "notebooklm-2-0", notebook_id, question),
+            _stream_chat(client, "notebooklm-2-0", notebook_id, question, session_data, adapter, session_args),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     try:
-        result = await client.chat.ask(notebook_id=notebook_id, question=question)
+        result = await client.chat.ask(notebook_id=notebook_id, question=question, **session_args)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+    # Extract session data
+    session_data.update(adapter.extract(result, session_data))
 
     answer = result.answer or ""
     refs = getattr(result, "references", [])
@@ -121,13 +130,15 @@ async def chat_completions(
 
 
 async def _stream_chat(
-    client: NotebookLMClient, model: str, notebook_id: str, question: str
+    client: NotebookLMClient, model: str, notebook_id: str, question: str, session_data: dict, adapter, session_args: dict
 ) -> AsyncGenerator[str, None]:
     response_id = f"chatcmpl-{int(time.time())}"
     try:
         result = await client.chat.ask(
-            notebook_id=notebook_id, question=question
+            notebook_id=notebook_id, question=question, **session_args
         )
+        # Extract session data
+        session_data.update(adapter.extract(result, session_data))
         answer = result.answer or ""
         first = True
         for line in answer.split("\n"):

@@ -13,7 +13,8 @@ sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.security import APIKeyHeader, HTTPBearer
 from fastapi.responses import JSONResponse, RedirectResponse
 from gemini_webapi import GeminiClient
 
@@ -27,6 +28,22 @@ from core.routers.gemini import router as gemini_router
 from core.routers.notebooklm import router as notebooklm_router
 from core.routers.metaai import router as metaai_router
 from core.routers.grok import router as grok_router
+from core.routers.keys import router as keys_router
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from core.session import (
+    session_store,
+    session_manager,
+    validate_api_key,
+    get_api_key_hash,
+    VirtualSessionMiddleware
+)
+
+def _extract_provider(path: str) -> str:
+    parts = [p for p in path.split('/') if p]
+    if len(parts) >= 2 and parts[0] == 'v1':
+        return parts[1]
+    return 'unknown'
 
 
 @asynccontextmanager
@@ -101,6 +118,9 @@ async def lifespan(app: FastAPI):
         await notebooklm_ctx.__aexit__(None, None, None)
 
 
+security_bearer = HTTPBearer(auto_error=False)
+api_key_header = APIKeyHeader(name="X-Api-Key", auto_error=False)
+
 app = FastAPI(
     title="Unofficial API Gateway",
     version="0.1.0",
@@ -115,13 +135,24 @@ app = FastAPI(
         "Set environment variables in `.env` file before making requests."
     ),
     lifespan=lifespan,
+    dependencies=[Depends(security_bearer), Depends(api_key_header)],
 )
+
+session_middleware = VirtualSessionMiddleware(
+    store=session_store,
+    manager=session_manager,
+    validate_key_fn=validate_api_key,
+    get_key_hash_fn=get_api_key_hash,
+    extract_provider_fn=_extract_provider
+)
+app.add_middleware(BaseHTTPMiddleware, dispatch=session_middleware)
 
 app.include_router(deepseek_router, prefix="/v1/deepseek")
 app.include_router(gemini_router, prefix="/v1/gemini")
 app.include_router(notebooklm_router, prefix="/v1/notebooklm")
 app.include_router(metaai_router, prefix="/v1/metaai")
 app.include_router(grok_router, prefix="/v1/grok")
+app.include_router(keys_router, prefix="/v1/keys")
 
 
 @app.get("/health", summary="Health check", tags=["System"])
