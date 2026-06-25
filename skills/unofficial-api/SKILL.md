@@ -17,6 +17,26 @@ All requests: `${UNOFFICIAL_API_URL}/v1/{provider}/chat/completions`.
 
 Verify: `curl $UNOFFICIAL_API_URL/health` → `{"status":"ok"}`.
 
+## Authentication
+
+All chat and model endpoints require an API key. Generate one first (no auth needed to bootstrap):
+
+```bash
+curl -X POST $UNOFFICIAL_API_URL/v1/keys/generate \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-key"}'
+# → {"api_key": "ua-xxxxxxxx-xxxxxx-xxxxxxxx", "name": "my-key"}
+
+export UNOFFICIAL_API_KEY="ua-xxxxxxxx-xxxxxx-xxxxxxxx"
+```
+
+Pass the key on every request using one of:
+```
+Authorization: Bearer ua-xxxxxxxx-xxxxxx-xxxxxxxx
+# or
+X-Api-Key: ua-xxxxxxxx-xxxxxx-xxxxxxxx
+```
+
 ## Providers
 
 Each provider has its own prefix under `/v1/`. Credentials are set via environment variables at server startup.
@@ -49,12 +69,15 @@ All return OpenAI-compatible shape:
 
 ## Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/v1/{provider}/chat/completions` | Chat completion (OpenAI format) |
-| `GET` | `/v1/{provider}/models` | List models for provider |
-| `GET` | `/health` | Health check with provider connection status |
-| `GET` | `/` | Redirect to API docs (Swagger UI) |
+| Method | Endpoint | Auth required | Description |
+|---|---|---|---|
+| `POST` | `/v1/{provider}/chat/completions` | ✅ | Chat completion (OpenAI format) |
+| `GET` | `/v1/{provider}/models` | ✅ | List models for provider |
+| `GET` | `/health` | ❌ | Health check with provider connection status |
+| `GET` | `/` | ❌ | Redirect to API docs (Swagger UI) |
+| `POST` | `/v1/keys/generate` | ❌ | Generate a new API key |
+| `GET` | `/v1/keys` | ❌ | List all API keys (masked) |
+| `POST` | `/v1/keys/revoke` | ❌ | Deactivate an API key |
 
 ## Error format
 
@@ -77,9 +100,12 @@ When the user needs a specific capability, fetch that skill's `SKILL.md` from it
 | Capability | Raw URL |
 |---|---|
 | Chat / code-gen | https://raw.githubusercontent.com/2noscript/unofficial-api/refs/heads/master/skills/unofficial-api-chat/SKILL.md |
+| Session & Auth Architecture (dev) | https://raw.githubusercontent.com/2noscript/unofficial-api/refs/heads/master/skills/unofficial-api-session-arch/SKILL.md |
 
 ## Errors
 
+- `401 missing_api_key` → add `Authorization: Bearer <key>` header
+- `401 invalid_api_key` → key is wrong or revoked; generate a new one via `POST /v1/keys/generate`
 - `503` → check provider credentials in `.env`
 - `400` → check `model` and `messages` fields
 - `500` → upstream provider error; check provider status

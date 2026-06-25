@@ -10,6 +10,7 @@ Drop-in skills for any AI agent (Claude, Cursor, ChatGPT, custom SDK). Just **co
 |---|---|
 | **Entry / Setup** (start here) | https://raw.githubusercontent.com/2noscript/unofficial-api/refs/heads/master/skills/unofficial-api/SKILL.md |
 | Chat / code-gen | https://raw.githubusercontent.com/2noscript/unofficial-api/refs/heads/master/skills/unofficial-api-chat/SKILL.md |
+| Session & Auth Architecture (dev) | https://raw.githubusercontent.com/2noscript/unofficial-api/refs/heads/master/skills/unofficial-api-session-arch/SKILL.md |
 
 ## How to use
 

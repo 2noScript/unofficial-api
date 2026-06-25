@@ -5,7 +5,7 @@ description: Chat / code generation via Unofficial API using OpenAI /v1/chat/com
 
 # Unofficial API — Chat
 
-Requires `UNOFFICIAL_API_URL`. See https://raw.githubusercontent.com/2noscript/unofficial-api/refs/heads/master/skills/unofficial-api/SKILL.md for setup and provider credentials.
+Requires `UNOFFICIAL_API_URL` and `UNOFFICIAL_API_KEY`. See https://raw.githubusercontent.com/2noscript/unofficial-api/refs/heads/master/skills/unofficial-api/SKILL.md for setup, provider credentials, and how to generate an API key.
 
 ## Endpoints
 
@@ -115,6 +115,7 @@ data: [DONE]
 
 ```bash
 curl -X POST $UNOFFICIAL_API_URL/v1/deepseek/chat/completions \
+  -H "Authorization: Bearer $UNOFFICIAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"deepseek-v3","messages":[{"role":"user","content":"Write a Python function to sort a list"}],"stream":false}'
 ```
@@ -123,6 +124,7 @@ curl -X POST $UNOFFICIAL_API_URL/v1/deepseek/chat/completions \
 
 ```bash
 curl -X POST $UNOFFICIAL_API_URL/v1/gemini/chat/completions \
+  -H "Authorization: Bearer $UNOFFICIAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"gemini-3-flash","messages":[{"role":"user","content":"Explain quantum computing"}],"stream":true}'
 ```
@@ -131,6 +133,7 @@ curl -X POST $UNOFFICIAL_API_URL/v1/gemini/chat/completions \
 
 ```bash
 curl -X POST $UNOFFICIAL_API_URL/v1/grok/chat/completions \
+  -H "Authorization: Bearer $UNOFFICIAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"grok-4.20-auto","messages":[{"role":"user","content":"What is the meaning of life?"}],"stream":false}'
 ```
@@ -139,6 +142,7 @@ curl -X POST $UNOFFICIAL_API_URL/v1/grok/chat/completions \
 
 ```bash
 curl -X POST $UNOFFICIAL_API_URL/v1/metaai/chat/completions \
+  -H "Authorization: Bearer $UNOFFICIAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"llama-4","messages":[{"role":"user","content":"Write a poem about AI"}],"stream":false}'
 ```
@@ -147,18 +151,40 @@ curl -X POST $UNOFFICIAL_API_URL/v1/metaai/chat/completions \
 
 ```bash
 curl -X POST $UNOFFICIAL_API_URL/v1/notebooklm/chat/completions \
+  -H "Authorization: Bearer $UNOFFICIAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"notebooklm-2-0","messages":[{"role":"user","content":"Summarize the key points from my sources"}],"stream":false}'
+```
+
+### Continue a conversation (session context)
+
+The response includes an `x-session-id` header. Pass it in subsequent requests to continue the same conversation thread:
+
+```bash
+# Step 1 — start a conversation, capture session ID
+SESSION_ID=$(curl -si $UNOFFICIAL_API_URL/v1/gemini/chat/completions \
+  -H "Authorization: Bearer $UNOFFICIAL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemini-3-flash","messages":[{"role":"user","content":"My name is Alice"}]}' \
+  | grep -i x-session-id | awk '{print $2}' | tr -d '\r')
+
+# Step 2 — continue the conversation
+curl -X POST $UNOFFICIAL_API_URL/v1/gemini/chat/completions \
+  -H "Authorization: Bearer $UNOFFICIAL_API_KEY" \
+  -H "X-Session-Id: $SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemini-3-flash","messages":[{"role":"user","content":"What is my name?"}]}'
 ```
 
 ### Python (OpenAI SDK)
 
 ```python
 from openai import OpenAI
+import os
 
 client = OpenAI(
     base_url="http://localhost:8000/v1/deepseek",
-    api_key="not-needed"  # auth via env vars on server
+    api_key=os.environ["UNOFFICIAL_API_KEY"]  # ua-xxxxxxxx-xxxxxx-xxxxxxxx
 )
 
 response = client.chat.completions.create(
