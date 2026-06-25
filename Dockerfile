@@ -4,7 +4,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY notebooklm-py/ notebooklm-py/
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev && \
+    find /app/.venv -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 FROM python:3.12-slim
 WORKDIR /app

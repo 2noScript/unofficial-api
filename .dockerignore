@@ -9,3 +9,8 @@ __pycache__/
 README.md
 assets/
 templates/
+docs/
+.gitattributes
+tests/
+examples/
+*.md
