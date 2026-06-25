@@ -93,7 +93,7 @@ These share the same format across all providers.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `gemini-3-flash`, `notebooklm-2-0`, `llama-4`, `grok-3`) |
+| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `gemini-3-flash`, `notebooklm-2-0`, `llama-4`, `grok-4.20-auto`) |
 | `messages` | array | ✅ | — | `[{"role": "user", "content": "..."}]` |
 | `stream` | bool | ❌ | `false` | Enable SSE streaming |
 
@@ -147,7 +147,7 @@ curl -s http://localhost:8000/v1/gemini/chat/completions \
 # Grok
 curl -s http://localhost:8000/v1/grok/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "grok-3", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "grok-4.20-auto", "messages": [{"role": "user", "content": "Hello!"}]}'
 
 # Meta AI
 curl -s http://localhost:8000/v1/metaai/chat/completions \

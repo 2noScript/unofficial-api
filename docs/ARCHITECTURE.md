@@ -10,7 +10,7 @@ This project is a **unified OpenAI-compatible API gateway** that proxies request
 | Gemini | Vendored (`sys.path`) | Async | Cookie |
 | NotebookLM | PyPI (`notebooklm-py`) | Async | Storage file |
 | Meta AI | Vendored (`sys.path`) | Sync → ThreadPoolExecutor | Cookie |
-| Grok | PyPI (`GrokWeb-to-API`) | Sync → ThreadPoolExecutor | Cookie |
+| Grok | Vendored (`sys.path`) | Async | Cookie |
 
 All providers expose two OpenAI-compatible endpoints (`/models`, `/chat/completions`) plus provider-specific endpoints under `/v1/{provider}/...`.
 
@@ -22,7 +22,7 @@ NotebookLM additionally exposes media generation endpoints (audio, video, cinema
 
 ```
 unofficial-api/
-├── app/
+├── core/
 │   ├── __init__.py
 │   ├── server.py              # FastAPI app, lifespan, router registration
 │   ├── schemas.py             # Shared Pydantic models (OpenAI-compatible + provider-specific)
@@ -41,6 +41,7 @@ unofficial-api/
 │       ├── grok/               # 2 routes
 │       │   ├── __init__.py
 │       │   ├── router.py
+│       │   ├── client.py       # GrokClient — grok2api transport integration
 │       │   ├── chat.py         # Chat completions (fake streaming)
 │       │   ├── models.py
 │       │   └── helpers.py
@@ -60,9 +61,9 @@ unofficial-api/
 │           └── artifacts.py     # Media generation + download — audio/video/cinematic (7 routes)
 ├── deepseek-api/         # Vendored SDK (git submodule)
 ├── Gemini-API/           # Vendored SDK (git submodule)
+├── grok2api/             # Vendored SDK (git submodule)
 ├── notebooklm-py/        # Vendored SDK (git submodule)
 ├── metaai-api/           # Vendored SDK (git submodule)
-├── GrokWeb-to-API/       # Vendored SDK (git submodule)
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── CONVERSION.md
@@ -92,7 +93,7 @@ NotebookLM uses a flat file-per-feature approach (3 files). Other providers use 
 
 ---
 
-## Lifecycle (`app/server.py`)
+## Lifecycle (`core/server.py`)
 
 ### Startup (`lifespan` context manager)
 
@@ -103,7 +104,7 @@ On every server start:
    - **Gemini**: `GeminiClient(secure_1psid=..., secure_1psidts=...)` → `await client.init()`
    - **NotebookLM**: `NotebookLMClient.from_storage(path=...)` → `await ctx.__aenter__()`
    - **Meta AI**: `MetaAI(cookies={...})` — synchronous
-   - **Grok**: `GrokClient(cookies={...})` — synchronous
+   - **Grok**: `GrokClient(cookies_str=..., user_agent=..., browser=...)` — async
    - **DeepSeek**: initialized lazily per-request (stateless)
 4. Stores all clients on `app.state`
 
@@ -113,7 +114,8 @@ If a client fails to initialize (missing credentials, network error), it logs a 
 
 - Gemini: `await client.close()`
 - NotebookLM: `await ctx.__aexit__()`
-- Meta AI, Grok, DeepSeek: no explicit cleanup needed (sync clients)
+- Meta AI, DeepSeek: no explicit cleanup needed (sync clients)
+- Grok: no explicit cleanup needed
 
 ### Per-Request Flow
 
@@ -144,7 +146,7 @@ sequenceDiagram
 
 ## Client Architecture
 
-### Sync Clients (DeepSeek, Meta AI, Grok)
+### Sync Clients (DeepSeek, Meta AI)
 
 These SDKs use `requests` (synchronous). Since FastAPI is async, we wrap calls in `asyncio.get_event_loop().run_in_executor()` with a `ThreadPoolExecutor`.
 
@@ -154,9 +156,9 @@ loop = asyncio.get_event_loop()
 result = await loop.run_in_executor(None, lambda: sync_client.method(**params))
 ```
 
-### Async Clients (Gemini, NotebookLM)
+### Async Clients (Gemini, NotebookLM, Grok)
 
-These SDKs use `aiohttp` / native `asyncio`. Handlers `await` them directly.
+These SDKs use `curl_cffi` / `aiohttp` / native `asyncio`. Handlers `await` them directly.
 
 ```python
 # Geminin
@@ -174,7 +176,7 @@ result = await client.chat.ask(notebook_id=..., question=...)
 | Gemini | Real SSE | `async for chunk in response: yield chunk` |
 | DeepSeek | Real SSE | Stream via WebSocket → SSE translation |
 | Meta AI | Real SSE | `response.iter_content(chunk_size=...)` |
-| Grok | Fake | Receive full response, split by space, yield each word as SSE event |
+| Grok | Fake (async) | Receive full response from grok2api SDK, split by space, yield each word as SSE event |
 | NotebookLM | Fake | Receive full answer, split by `\n`, yield each line as SSE event |
 
 All providers normalize to the same SSE format:
@@ -196,7 +198,7 @@ Each provider requires cookies extracted from a browser session.
 | Gemini | `GEMINI_SECURE_1PSID`, `GEMINI_SECURE_1PSIDTS` (optional) | Browser DevTools → Cookies |
 | NotebookLM | `NOTEBOOKLM_STORAGE_PATH` | CLI: `notebooklm login` → `storage_state.json` |
 | Meta AI | `META_AI_DATR`, `META_AI_ECTO_1_SESS` (optional), `META_AI_ABRA_SESS` (optional) | Browser DevTools → Cookies |
-| Grok | `GROK_SSO`, `GROK_SSO_RW` | Browser DevTools → Cookies |
+| Grok | `GROK_PROXY_CF_COOKIES`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | Browser DevTools → Cookies |
 
 Cookies expire. When requests start returning auth errors, re-extract and restart the server.
 
@@ -211,9 +213,10 @@ Five vendored SDK directories exist at the project root. They are standalone git
 These SDKs are plain Python packages usable via `sys.path.insert`:
 
 ```python
-# app/server.py
+# core/server.py
 sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API/src"))
 sys.path.insert(0, os.path.join(BASE, "..", "metaai-api/src"))
+sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
 
 from gemini_webapi import GeminiClient       # from Gemini-API/src/gemini_webapi/
 from metaai_api import MetaAI                # from metaai-api/src/metaai_api/
@@ -225,12 +228,10 @@ sys.path.insert(0, os.path.join(BASE, "..", "deepseek-api"))
 from deepseek_api import DeepseekClient
 ```
 
-### pip install required
-
-**GrokWeb-to-API** requires `pip install` because `grok_client/__init__.py` calls `importlib.metadata.version("GrokWeb-to-API")` which fails without a proper package installation. Installed via:
-
-```bash
-uv add ./GrokWeb-to-API
+**Grok** uses a `sys.path` import (like DeepSeek, Gemini, Meta AI):
+```python
+sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
+from core.routers.grok.client import GrokClient  # wraps grok2api transport modules
 ```
 
 **NotebookLM** is installed from PyPI:
@@ -244,12 +245,10 @@ pip install notebooklm-py>=0.7.2
 COPY deepseek-api/ deepseek-api/
 COPY Gemini-API/ Gemini-API/
 COPY metaai-api/ metaai-api/
-COPY GrokWeb-to-API/ GrokWeb-to-API/
+COPY grok2api/ grok2api/
+COPY notebooklm-py/ notebooklm-py/
 
-# notebooklm-py is pip-installed from PyPI (not vendored)
-RUN pip install notebooklm-py
-# Grok needs pip install for importlib.metadata
-RUN pip install -e ./GrokWeb-to-API
+# notebooklm-py is in [tool.uv.sources] as path dependency
 ```
 
 ---
