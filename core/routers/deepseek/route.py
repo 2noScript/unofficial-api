@@ -122,7 +122,7 @@ def _run_chat(messages: list, model_type: str, thinking_enabled: bool, search_en
     raise RuntimeError(last_error)
 
 
-async def _stream_chat(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
+async def _stream_chat_fake(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
     response_id = f"chatcmpl-{int(time.time())}"
     try:
         loop = asyncio.get_event_loop()
@@ -138,6 +138,79 @@ async def _stream_chat(messages: list, model: str, model_type: str, thinking_ena
         if not first:
             yield make_stream_chunk(model, "", response_id, is_final=True)
         yield STREAM_END
+    except ValueError as e:
+        yield make_error_chunk(str(e), "authentication_error", "invalid_credentials")
+        yield STREAM_END
+    except Exception as e:
+        yield make_error_chunk(str(e), "server_error", "upstream_error")
+        yield STREAM_END
+
+
+async def _stream_chat_real(messages: list, model: str, model_type: str, thinking_enabled: bool, search_enabled: bool) -> AsyncGenerator[str, None]:
+    try:
+        ds_session_id, auth_token = _get_auth()
+        user_message = extract_text(messages[-1].content) if messages else ""
+        response_id = f"chatcmpl-{int(time.time())}"
+
+        queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+        sentinel = object()
+
+        def on_text(chunk: str):
+            loop.call_soon_threadsafe(queue.put_nowait, chunk)
+
+        def _send() -> dict:
+            """Call send_message with retry, without sentinel."""
+            for attempt in range(2):
+                try:
+                    chat = DeepSeekChat(ds_session_id, auth_token)
+                    result = chat.send_message(
+                        user_message,
+                        thinking_enabled=thinking_enabled,
+                        search_enabled=search_enabled,
+                        model_type=model_type,
+                        text_callback=on_text,
+                    )
+                    if result.get("ok"):
+                        return result
+                    logger.warning("DeepSeek send attempt %d failed", attempt + 1)
+                except Exception as e:
+                    if attempt == 0:
+                        logger.warning("DeepSeek send attempt %d threw: %s", attempt + 1, e)
+                        continue
+                    raise
+            return {"ok": False, "content": "DeepSeek failed after retry"}
+
+        def run() -> dict:
+            try:
+                return _send()
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, sentinel)
+
+        task = loop.run_in_executor(None, run)
+
+        first = True
+        while True:
+            chunk = await queue.get()
+            if chunk is sentinel:
+                break
+            yield make_stream_chunk(model, chunk, response_id, is_first=first)
+            first = False
+
+        result = await task
+
+        if not result.get("ok"):
+            err = result.get("content", "Unknown error")
+            if isinstance(err, (bytes, bytearray)):
+                err = err.decode("utf-8", errors="replace")
+            yield make_error_chunk(str(err))
+            yield STREAM_END
+            return
+
+        if not first:
+            yield make_stream_chunk(model, "", response_id, is_final=True)
+        yield STREAM_END
+
     except ValueError as e:
         yield make_error_chunk(str(e), "authentication_error", "invalid_credentials")
         yield STREAM_END
@@ -181,7 +254,7 @@ async def chat_completions(
     try:
         if stream:
             return StreamingResponse(
-                _stream_chat(messages, model, model_type, thinking_enabled, False),
+                _stream_chat_real(messages, model, model_type, thinking_enabled, False),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
