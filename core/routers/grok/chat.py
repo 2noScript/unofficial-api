@@ -91,9 +91,9 @@ async def _stream_chat(client, prompt: str, mode_id: ModeId) -> AsyncGenerator[s
     try:
         result = await client.send_message(prompt, mode_id=mode_id)
         for token in result.split():
-            chunk = json.dumps({"choices": [{"delta": {"content": token + " "}}]})
+            chunk = json.dumps({"choices": [{"delta": {"content": token + " "}}]}, ensure_ascii=False)
             yield f"data: {chunk}\n\n"
     except Exception as e:
-        data = json.dumps({"error": str(e)})
+        data = json.dumps({"error": str(e)}, ensure_ascii=False)
         yield f"data: {data}\n\n"
     yield "data: [DONE]\n\n"

@@ -93,9 +93,9 @@ async def _stream_gemini(
         async for chunk in gen:
             delta = chunk.text_delta
             if delta:
-                data = json.dumps({"choices": [{"delta": {"content": delta}}]})
+                data = json.dumps({"choices": [{"delta": {"content": delta}}]}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
     except Exception as e:
-        data = json.dumps({"error": str(e)})
+        data = json.dumps({"error": str(e)}, ensure_ascii=False)
         yield f"data: {data}\n\n"
     yield "data: [DONE]\n\n"

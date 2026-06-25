@@ -124,10 +124,10 @@ async def _stream_chat(
         answer = result.answer or ""
         for line in answer.split("\n"):
             if line:
-                chunk = json.dumps({"choices": [{"delta": {"content": line + "\n"}}]})
+                chunk = json.dumps({"choices": [{"delta": {"content": line + "\n"}}]}, ensure_ascii=False)
                 yield f"data: {chunk}\n\n"
     except Exception as e:
-        data = json.dumps({"error": str(e)})
+        data = json.dumps({"error": str(e)}, ensure_ascii=False)
         yield f"data: {data}\n\n"
     yield "data: [DONE]\n\n"
 

@@ -101,14 +101,14 @@ async def _stream_chat(client: MetaAI, prompt: str) -> AsyncGenerator[str, None]
                 if isinstance(chunk, dict):
                     text = chunk.get("message", "") or chunk.get("text", "") or ""
                     if text:
-                        data = json.dumps({"choices": [{"delta": {"content": text}}]})
+                        data = json.dumps({"choices": [{"delta": {"content": text}}]}, ensure_ascii=False)
                         yield f"data: {data}\n\n"
         else:
             text = gen.get("message", "") if isinstance(gen, dict) else str(gen)
             if text:
-                data = json.dumps({"choices": [{"delta": {"content": text}}]})
+                data = json.dumps({"choices": [{"delta": {"content": text}}]}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
     except Exception as e:
-        data = json.dumps({"error": str(e)})
+        data = json.dumps({"error": str(e)}, ensure_ascii=False)
         yield f"data: {data}\n\n"
     yield "data: [DONE]\n\n"
