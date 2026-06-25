@@ -166,6 +166,7 @@ async def _stream_chat_real(messages: list, model: str, model_type: str, thinkin
 
         def _send() -> dict:
             """Call send_message with retry, without sentinel."""
+            last_err = "Unknown error"
             for attempt in range(2):
                 try:
                     chat = DeepSeekChat(ds_session_id, auth_token)
@@ -181,13 +182,18 @@ async def _stream_chat_real(messages: list, model: str, model_type: str, thinkin
                     if result.get("ok"):
                         session_data.update(adapter.extract({'_chat_instance': chat}, session_data))
                         return result
-                    logger.warning("DeepSeek send attempt %d failed", attempt + 1)
+                    last_err = result.get("content", "Unknown error")
+                    if isinstance(last_err, (bytes, bytearray)):
+                        last_err = last_err.decode("utf-8", errors="replace")
+                    logger.warning("DeepSeek send attempt %d failed: %s", attempt + 1, last_err)
                 except Exception as e:
+                    last_err = str(e)
+                    logger.warning("DeepSeek send attempt %d threw: %s", attempt + 1, e)
                     if attempt == 0:
-                        logger.warning("DeepSeek send attempt %d threw: %s", attempt + 1, e)
                         continue
                     raise
-            return {"ok": False, "content": "DeepSeek failed after retry"}
+            logger.error("DeepSeek failed after all retries: %s", last_err)
+            return {"ok": False, "content": f"DeepSeek failed after retry: {last_err}"}
 
         def run() -> dict:
             try:

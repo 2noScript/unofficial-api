@@ -66,6 +66,11 @@ cp .env.example .env
 | `META_AI_ECTO_1_SESS` | ❌ | Meta AI `ecto_1_sess` cookie — [docs](docs/metaai.md) |
 | `META_AI_ABRA_SESS` | ❌ | Meta AI `abra_sess` cookie — [docs](docs/metaai.md) |
 | `GROK_PROXY_CF_COOKIES`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | ✅ | Grok cookies + config — [docs](docs/grok.md) |
+| `SESSION_TTL_DAYS` | ❌ | Session lifetime in days after last use. `0` = never expire. Default: `7` |
+| `SESSION_MAX_SESSIONS` | ❌ | Max sessions kept in memory. Default: `5000` |
+| `API_KEY_SECRET` | ❌ | HMAC secret for API key signing. Change in production. |
+| `UNOFFICIAL_API_DATA_DIR` | ❌ | Directory for `api_keys.json`, `sessions.json`, `machine_id`. Default: `~/.unofficial-api` |
+
 
 \*Required for NotebookLM endpoints. `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` required for chat completions.
 
