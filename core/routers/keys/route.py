@@ -19,7 +19,7 @@ class KeyRevokeResponse(BaseModel):
     api_key: str = Field(..., description="The revoked API key")
 
 class KeyInfo(BaseModel):
-    key: str = Field(..., description="Masked API key (e.g. ua-xxxxx...)")
+    key: str = Field(..., description="The full API key")
     name: str = Field(..., description="The key's friendly name")
     created_at: str = Field(..., description="Creation date ISO string")
     is_active: bool = Field(..., description="True if key is active")

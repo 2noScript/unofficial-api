@@ -109,7 +109,7 @@ def list_api_keys() -> list[dict]:
     result = []
     for key, info in data.get('keys', {}).items():
         result.append({
-            'key': f"{key[:20]}...",
+            'key': key,
             'name': info.get('name', ''),
             'created_at': info.get('created_at', ''),
             'is_active': info.get('is_active', True),
