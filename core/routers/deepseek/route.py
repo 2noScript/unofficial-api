@@ -125,6 +125,11 @@ def _run_chat(
     history = session_data.get("history", [])
     has_provider_session = bool(session_data.get("deepseek_chat_session_id"))
 
+    # If we've previously fallen back to virtual transcript mode, stay there
+    if session_data.get("deepseek_force_virtual"):
+        adapter.clear_provider_session(session_data)
+        has_provider_session = False
+
     last_error: str = "Unknown error"
     last_status: int = 500
 
@@ -155,12 +160,14 @@ def _run_chat(
                 logger.warning("DeepSeek session error, resetting provider session: %s", err)
                 adapter.clear_provider_session(session_data)
                 has_provider_session = False
+                session_data["deepseek_force_virtual"] = True
                 continue
 
             continue
 
-        # Success — persist session state
-        session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
+        # Success — persist session state (skip provider IDs in virtual-only mode)
+        if not session_data.get("deepseek_force_virtual"):
+            session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
 
         content = result.get("content", {})
         if isinstance(content, dict):
