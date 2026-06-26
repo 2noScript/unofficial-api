@@ -193,9 +193,8 @@ async def _stream_chat_fake(
         text = result.get("response", "")
         first = True
         for line in text.split("\n"):
-            if line.strip():
-                yield make_stream_chunk(model, line + "\n", response_id, is_first=first)
-                first = False
+            yield make_stream_chunk(model, line + "\n", response_id, is_first=first)
+            first = False
         if not first:
             yield make_stream_chunk(model, "", response_id, is_final=True)
         yield STREAM_END
