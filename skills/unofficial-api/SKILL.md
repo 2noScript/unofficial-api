@@ -43,10 +43,10 @@ Each provider has its own prefix under `/v1/`. Credentials are set via environme
 
 | Provider | Prefix | Auth (env) |
 |---|---|---|
-| DeepSeek | `/v1/deepseek` | `DEEPSEEK_SESSION_ID` + `DEEPSEEK_AUTH_TOKEN` |
-| Gemini | `/v1/gemini` | `GEMINI_SECURE_1PSID` + `GEMINI_SECURE_1PSIDTS` |
-| Grok (xAI) | `/v1/grok` | `GROK_PROXY_CF_COOKIES` |
-| Meta AI | `/v1/metaai` | `META_AI_DATR` + `META_AI_ABRA_SESS` + `META_AI_ECTO_1_SESS` |
+| DeepSeek | `/v1/deepseek` | `DEEPSEEK_COOKIE` + `DEEPSEEK_AUTH_TOKEN` |
+| Gemini | `/v1/gemini` | `GEMINI_COOKIE` |
+| Grok (xAI) | `/v1/grok` | `GROK_COOKIE` |
+| Meta AI | `/v1/metaai` | `META_AI_COOKIE` |
 | NotebookLM | `/v1/notebooklm` | `NOTEBOOKLM_STORAGE_PATH` |
 
 ## Discover models

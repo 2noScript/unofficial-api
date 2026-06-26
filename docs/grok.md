@@ -8,7 +8,7 @@
 
 | Env var | Required | Description |
 |---|---|---|---|
-| `GROK_PROXY_CF_COOKIES` | ✅ | Full cookie string from grok.com (includes `sso`, `sso-rw`, `cf_clearance`, etc.) |
+| `GROK_COOKIE` | ✅ | Full cookie string from grok.com (includes `sso`, `sso-rw`, `cf_clearance`, etc.) |
 | `GROK_PROXY_USER_AGENT` | ✅ | User-Agent header (must match browser version, e.g. Chrome/136) |
 | `GROK_PROXY_BROWSER` | ✅ | curl_cffi impersonation profile (e.g. `chrome136`) |
 

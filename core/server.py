@@ -38,6 +38,8 @@ from core.session import (
     get_api_key_hash,
     VirtualSessionMiddleware
 )
+from core.utils import parse_cookie
+
 
 def _extract_provider(path: str) -> str:
     parts = [p for p in path.split('/') if p]
@@ -46,11 +48,58 @@ def _extract_provider(path: str) -> str:
     return 'unknown'
 
 
+def validate_env():
+    errors = []
+
+    if os.environ.get("DEEPSEEK_COOKIE") or os.environ.get("DEEPSEEK_AUTH_TOKEN"):
+        dc = os.environ.get("DEEPSEEK_COOKIE") or ""
+        if not parse_cookie(dc, "ds_session_id"):
+            errors.append("DeepSeek: missing ds_session_id. Set DEEPSEEK_COOKIE=\"ds_session_id=...\"")
+        if not os.environ.get("DEEPSEEK_AUTH_TOKEN"):
+            errors.append("DeepSeek: missing auth token. Set DEEPSEEK_AUTH_TOKEN")
+
+    if os.environ.get("GEMINI_COOKIE"):
+        gc = os.environ.get("GEMINI_COOKIE") or ""
+        if not parse_cookie(gc, "__Secure-1PSID"):
+            errors.append("Gemini: missing __Secure-1PSID. Set GEMINI_COOKIE=\"__Secure-1PSID=...\"")
+        # __Secure-1PSIDTS is optional
+
+    if os.environ.get("META_AI_COOKIE"):
+        mc = os.environ.get("META_AI_COOKIE") or ""
+        for key in ["datr", "abra_sess", "ecto_1_sess"]:
+            if not parse_cookie(mc, key):
+                errors.append(f"Meta AI: missing {key}. Set META_AI_COOKIE=\"...; {key}=...\"")
+
+    if os.environ.get("GROK_COOKIE") or os.environ.get("GROK_PROXY_USER_AGENT") or os.environ.get("GROK_PROXY_BROWSER"):
+        if not os.environ.get("GROK_COOKIE"):
+            errors.append("Grok: missing cookie string. Set GROK_COOKIE")
+
+    if os.environ.get("NOTEBOOKLM_STORAGE_PATH") or os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID"):
+        sp = os.environ.get("NOTEBOOKLM_STORAGE_PATH")
+        if sp and not os.path.exists(sp):
+            errors.append(f"NotebookLM: storage path not found: {sp}")
+        if sp and not os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID"):
+            errors.append("NotebookLM: missing default notebook ID. Set NOTEBOOKLM_DEFAULT_NOTEBOOK_ID")
+
+    if errors:
+        msg = "\n".join(
+            ["", "=" * 60, "  ENVIRONMENT VARIABLE ERRORS", "=" * 60]
+            + [f"  \u2022 {e}" for e in errors]
+            + ["=" * 60]
+        )
+        print(msg, file=sys.stderr)
+        sys.exit(1)
+
+
+validate_env()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Gemini
-    secure_1psid = os.environ.get("GEMINI_SECURE_1PSID")
-    secure_1psidts = os.environ.get("GEMINI_SECURE_1PSIDTS")
+    gemini_cookie = os.environ.get("GEMINI_COOKIE") or ""
+    secure_1psid = parse_cookie(gemini_cookie, "__Secure-1PSID")
+    secure_1psidts = parse_cookie(gemini_cookie, "__Secure-1PSIDTS")
     gemini_client = None
     if secure_1psid:
         gemini_client = GeminiClient(
@@ -80,14 +129,15 @@ async def lifespan(app: FastAPI):
     app.state.notebooklm_client = notebooklm_client
 
     # Meta AI
+    meta_cookie = os.environ.get("META_AI_COOKIE") or ""
     metaai_client = None
-    if os.environ.get("META_AI_DATR"):
+    cookies = {}
+    for key in ["datr", "abra_sess", "ecto_1_sess"]:
+        val = parse_cookie(meta_cookie, key)
+        if val:
+            cookies[key] = val
+    if cookies:
         try:
-            cookies = {}
-            for key, env_key in [("datr", "META_AI_DATR"), ("abra_sess", "META_AI_ABRA_SESS"), ("ecto_1_sess", "META_AI_ECTO_1_SESS")]:
-                val = os.environ.get(env_key)
-                if val:
-                    cookies[key] = val
             metaai_client = MetaAI(cookies=cookies)
         except Exception as e:
             print(f"[MetaAI] Init failed: {e}", file=sys.stderr)
@@ -97,7 +147,7 @@ async def lifespan(app: FastAPI):
 
     # Grok
     grok_client = None
-    grok_cookies_str = os.environ.get("GROK_PROXY_CF_COOKIES")
+    grok_cookies_str = os.environ.get("GROK_COOKIE")
     if grok_cookies_str:
         try:
             grok_client = GrokClient(

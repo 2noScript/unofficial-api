@@ -49,7 +49,7 @@ async def chat_completions(
     client = get_client(request)
     if not client:
         return JSONResponse(
-            {"error": "Grok client not initialized. Set GROK_PROXY_CF_COOKIES in .env."},
+            {"error": "Grok client not initialized. Set GROK_COOKIE in .env."},
             status_code=503,
         )
 

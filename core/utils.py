@@ -1,3 +1,13 @@
+import re
+
+
+def parse_cookie(cookie_str: str | None, name: str) -> str | None:
+    if not cookie_str:
+        return None
+    m = re.search(rf"(?:^|;\s*){re.escape(name)}=([^;]+)", cookie_str)
+    return m.group(1) if m else None
+
+
 def extract_text(content: str | list | None) -> str:
     if not content:
         return ""

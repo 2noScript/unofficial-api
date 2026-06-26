@@ -56,16 +56,13 @@ cp .env.example .env
 
 | Env var | Required | Description |
 |---|---|---|
-| `DEEPSEEK_SESSION_ID` | ✅ | DeepSeek `ds_session_id` cookie — [docs](docs/deepseek.md) |
-| `DEEPSEEK_AUTH_TOKEN` | ✅ | DeepSeek `authorization` cookie — [docs](docs/deepseek.md) |
-| `GEMINI_SECURE_1PSID` | ✅ | Google `__Secure-1PSID` cookie — [docs](docs/gemini.md) |
-| `GEMINI_SECURE_1PSIDTS` | ❌ | Google `__Secure-1PSIDTS` cookie — [docs](docs/gemini.md) |
+| `DEEPSEEK_COOKIE` | ✅ | DeepSeek full cookie string — [docs](docs/deepseek.md) |
+| `DEEPSEEK_AUTH_TOKEN` | ✅ | DeepSeek `authorization` header — [docs](docs/deepseek.md) |
+| `GEMINI_COOKIE` | ✅ | Gemini full cookie string — [docs](docs/gemini.md) |
 | `NOTEBOOKLM_STORAGE_PATH` | ❌* | Path to `storage_state.json` — [docs](docs/notebooklm.md) |
 | `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` | ❌* | Notebook ID for chat completions — [docs](docs/notebooklm.md) |
-| `META_AI_DATR` | ✅ | Meta AI `datr` cookie — [docs](docs/metaai.md) |
-| `META_AI_ECTO_1_SESS` | ❌ | Meta AI `ecto_1_sess` cookie — [docs](docs/metaai.md) |
-| `META_AI_ABRA_SESS` | ❌ | Meta AI `abra_sess` cookie — [docs](docs/metaai.md) |
-| `GROK_PROXY_CF_COOKIES`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | ✅ | Grok cookies + config — [docs](docs/grok.md) |
+| `META_AI_COOKIE` | ✅ | Meta AI full cookie string — [docs](docs/metaai.md) |
+| `GROK_COOKIE`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | ✅ | Grok cookies + config — [docs](docs/grok.md) |
 | `SESSION_TTL_DAYS` | ❌ | Session lifetime in days after last use. `0` = never expire. Default: `7` |
 | `SESSION_MAX_SESSIONS` | ❌ | Max sessions kept in memory. Default: `5000` |
 | `API_KEY_SECRET` | ❌ | HMAC secret for API key signing. Change in production. |

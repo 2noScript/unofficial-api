@@ -20,7 +20,7 @@ async def generate_image(request: Request):
     client = get_client(request)
     if not client:
         return JSONResponse(
-            {"error": "MetaAI client not initialized. Set META_AI_DATR in .env."},
+            {"error": "MetaAI client not initialized. Set META_AI_COOKIE in .env."},
             status_code=503,
         )
 
@@ -67,7 +67,7 @@ async def generate_video(request: Request):
     client = get_client(request)
     if not client:
         return JSONResponse(
-            {"error": "MetaAI client not initialized. Set META_AI_DATR in .env."},
+            {"error": "MetaAI client not initialized. Set META_AI_COOKIE in .env."},
             status_code=503,
         )
 
@@ -118,7 +118,7 @@ async def upload_image(
     client = get_client(request)
     if not client:
         return JSONResponse(
-            {"error": "MetaAI client not initialized. Set META_AI_DATR in .env."},
+            {"error": "MetaAI client not initialized. Set META_AI_COOKIE in .env."},
             status_code=503,
         )
 
@@ -209,7 +209,7 @@ async def extend_video(request: Request):
     client = get_client(request)
     if not client:
         return JSONResponse(
-            {"error": "MetaAI client not initialized. Set META_AI_DATR in .env."},
+            {"error": "MetaAI client not initialized. Set META_AI_COOKIE in .env."},
             status_code=503,
         )
 

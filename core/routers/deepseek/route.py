@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from DeepSeekAPI import DeepSeekChat
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
-from core.utils import extract_text
+from core.utils import extract_text, parse_cookie
 from core.session.adapters import get_adapter
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
@@ -61,11 +61,12 @@ DEEPSEEK_MODELS = [
 
 
 def _get_auth():
-    ds_session_id = os.environ.get("DEEPSEEK_SESSION_ID") or os.environ.get("DS_SESSION_ID")
-    auth_token = os.environ.get("DEEPSEEK_AUTH_TOKEN") or os.environ.get("AUTHORIZATION_TOKEN")
+    deepseek_cookie = os.environ.get("DEEPSEEK_COOKIE") or ""
+    ds_session_id = parse_cookie(deepseek_cookie, "ds_session_id")
+    auth_token = os.environ.get("DEEPSEEK_AUTH_TOKEN")
     if not ds_session_id or not auth_token:
         raise ValueError(
-            "DeepSeek credentials not found. Set DEEPSEEK_SESSION_ID and DEEPSEEK_AUTH_TOKEN"
+            "DeepSeek credentials not found. Set DEEPSEEK_COOKIE and DEEPSEEK_AUTH_TOKEN"
         )
     if not auth_token.startswith("Bearer "):
         auth_token = f"Bearer {auth_token}"

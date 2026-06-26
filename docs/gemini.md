@@ -3,13 +3,13 @@
 ## Credentials
 
 1. Go to https://gemini.google.com and sign in
-2. Open DevTools (F12) → **Application** → **Cookies** → `https://gemini.google.com`
-3. Copy the cookie values:
+2. Open DevTools (F12) → **Network** tab → reload → click any request to `gemini.google.com`
+3. In **Request Headers**, find the `Cookie:` line and copy the entire value (or use **Application** → **Cookies** to get individual cookie values)
 
 | Cookie name | Env var | Required |
 |---|---|---|
-| `__Secure-1PSID` | `GEMINI_SECURE_1PSID` | ✅ |
-| `__Secure-1PSIDTS` | `GEMINI_SECURE_1PSIDTS` | ❌ (account-dependent) |
+| `__Secure-1PSID` | part of `GEMINI_COOKIE` | ✅ |
+| `__Secure-1PSIDTS` | part of `GEMINI_COOKIE` | ❌ (account-dependent) |
 
 > Cookies expire. Re-extract them when requests start failing.
 
@@ -17,8 +17,7 @@
 
 | Env var | Required | Description |
 |---|---|---|
-| `GEMINI_SECURE_1PSID` | ✅ | `__Secure-1PSID` cookie value |
-| `GEMINI_SECURE_1PSIDTS` | ❌ | `__Secure-1PSIDTS` cookie value (optional, some accounts need it) |
+| `GEMINI_COOKIE` | ✅ | Full cookie string: `__Secure-1PSID=xxx; __Secure-1PSIDTS=yyy` |
 
 ## Endpoints
 

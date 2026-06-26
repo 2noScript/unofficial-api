@@ -194,11 +194,11 @@ Each provider requires cookies extracted from a browser session.
 
 | Provider | Env Vars | Extraction Method |
 |---|---|---|
-| DeepSeek | `DEEPSEEK_SESSION_ID`, `DEEPSEEK_AUTH_TOKEN` | Browser DevTools → Cookies |
-| Gemini | `GEMINI_SECURE_1PSID`, `GEMINI_SECURE_1PSIDTS` (optional) | Browser DevTools → Cookies |
+| DeepSeek | `DEEPSEEK_COOKIE`, `DEEPSEEK_AUTH_TOKEN` | Browser DevTools → Network → Request Headers |
+| Gemini | `GEMINI_COOKIE` | Browser DevTools → Network → Request Headers |
 | NotebookLM | `NOTEBOOKLM_STORAGE_PATH` | CLI: `notebooklm login` → `storage_state.json` |
-| Meta AI | `META_AI_DATR`, `META_AI_ECTO_1_SESS` (optional), `META_AI_ABRA_SESS` (optional) | Browser DevTools → Cookies |
-| Grok | `GROK_PROXY_CF_COOKIES`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | Browser DevTools → Cookies |
+| Meta AI | `META_AI_COOKIE` | Browser DevTools → Network → Request Headers |
+| Grok | `GROK_COOKIE`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | Browser DevTools → Application → Cookies |
 
 Cookies expire. When requests start returning auth errors, re-extract and restart the server.
 

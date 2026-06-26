@@ -3,22 +3,18 @@
 ## Credentials
 
 1. Go to https://meta.ai and sign in
-2. Open DevTools (F12) → **Application** → **Cookies** → `https://www.meta.ai`
-3. Copy the cookie values:
+2. Open DevTools (F12) → **Network** tab → reload → click any request to `meta.ai`
+3. In **Request Headers**, find the `Cookie:` line and copy the entire value.
 
-| Cookie name | Env var | Required |
+| Cookies needed | Env var | Required |
 |---|---|---|
-| `datr` | `META_AI_DATR` | ✅ |
-| `ecto_1_sess` | `META_AI_ECTO_1_SESS` | ❌ (needed for generation) |
-| `abra_sess` | `META_AI_ABRA_SESS` | ❌ (optional, region-dependent) |
+| `datr` + `abra_sess` + `ecto_1_sess` | `META_AI_COOKIE` | ✅ |
 
 ## Environment
 
 | Env var | Required | Description |
 |---|---|---|
-| `META_AI_DATR` | ✅ | `datr` cookie from meta.ai |
-| `META_AI_ECTO_1_SESS` | ❌ | `ecto_1_sess` cookie (needed for image/video gen) |
-| `META_AI_ABRA_SESS` | ❌ | `abra_sess` cookie (optional) |
+| `META_AI_COOKIE` | ✅ | Full cookie string: `datr=xxx; abra_sess=yyy; ecto_1_sess=zzz` |
 
 ## Endpoints
 

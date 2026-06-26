@@ -3,15 +3,15 @@
 ## Credentials
 
 1. Go to https://chat.deepseek.com and sign in
-2. Open DevTools (F12) → **Application** → **Cookies** → `https://chat.deepseek.com`
-3. Copy the cookie values:
+2. Open DevTools (F12) → **Network** tab → reload → click any request to `chat.deepseek.com`
+3. Copy the values:
 
-| Cookie/Header value | Env var | Required |
-|---|---|---|
-| `ds_session_id` (cookie) | `DEEPSEEK_SESSION_ID` | ✅ |
-| `authorization` (request header, including `Bearer ` prefix) | `DEEPSEEK_AUTH_TOKEN` | ✅ |
+| Source | Env var | Required | How to get |
+|---|---|---|---|
+| Full `Cookie` header | `DEEPSEEK_COOKIE` | ✅ | DevTools → Network → Request Headers → copy the entire `Cookie: ...` line |
+| `authorization` header | `DEEPSEEK_AUTH_TOKEN` | ✅ | DevTools → Network → Request Headers → copy the `authorization: ...` value |
 
-> The `authorization` value from DevTools looks like: `Bearer eyJhbGciOiJIUzI1NiIs...`. Copy the **entire value including `Bearer ` prefix**.
+> The `authorization` value looks like `Bearer eyJhbGciOiJIUzI1NiIs...`. Copy the **entire value**. The server auto-prepends `Bearer ` if missing from `DEEPSEEK_AUTH_TOKEN`.
 
 Or use **Cookie-Editor** extension to export all cookies at once.
 

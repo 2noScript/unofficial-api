@@ -2,7 +2,7 @@ import os
 import json
 from unittest.mock import patch, MagicMock
 
-os.environ.setdefault("DEEPSEEK_SESSION_ID", "test-session")
+os.environ.setdefault("DEEPSEEK_COOKIE", "ds_session_id=test-session")
 os.environ.setdefault("DEEPSEEK_AUTH_TOKEN", "test-auth-token")
 
 
