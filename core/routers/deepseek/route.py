@@ -346,6 +346,12 @@ async def chat_completions(
     stream = body.stream
     model = body.model or "deepseek-v3"
 
+    if model.lower() not in DEEPSEEK_MODEL_CONFIG:
+        return JSONResponse(
+            {"error": {"message": f"Model '{model}' not supported. Supported: {list(DEEPSEEK_MODEL_CONFIG)}", "type": "invalid_request_error", "code": "model_not_found"}},
+            status_code=400,
+        )
+
     model_type, thinking_enabled, _ = _get_model_config(model)
     logger.info("Request /v1/deepseek/chat/completions: %s", body.model_dump_json())
 

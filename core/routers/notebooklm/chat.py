@@ -66,6 +66,14 @@ async def chat_completions(
             status_code=400,
         )
 
+    VALID_NLM_MODELS = {"notebooklm-2-0"}
+    model = body.model or "notebooklm-2-0"
+    if model not in VALID_NLM_MODELS:
+        return JSONResponse(
+            {"error": f"Model '{model}' not supported. Supported: {sorted(VALID_NLM_MODELS)}"},
+            status_code=400,
+        )
+
     messages = body.messages
     stream = body.stream
 

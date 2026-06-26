@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 from fastapi import Request, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from gemini_webapi import GeminiClient, ChatSession
+from gemini_webapi.constants import Model as GeminiModel
 
 from .router import router
 from .helpers import _require_client, _resolve_model_name
@@ -56,11 +57,19 @@ async def chat_completions(
     if isinstance(client, JSONResponse):
         return client
 
+    VALID_GEMINI_MODELS = {m.model_name for m in GeminiModel if m is not GeminiModel.UNSPECIFIED}
+
     messages = [m.model_dump() for m in body.messages]
     stream = body.stream
     model = body.model or "gemini-3-flash"
 
     resolved_model = _resolve_model_name(model)
+    if resolved_model not in VALID_GEMINI_MODELS:
+        return JSONResponse(
+            {"error": {"message": f"Model '{model}' not supported. Supported: {sorted(VALID_GEMINI_MODELS)}", "type": "invalid_request_error", "code": "model_not_found"}},
+            status_code=400,
+        )
+
     raw_prompt = extract_text(messages[-1].get("content")) if messages else ""
     logger.info("Request /v1/gemini/chat/completions: %s", body.model_dump_json())
 

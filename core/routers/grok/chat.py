@@ -12,7 +12,7 @@ from app.control.model.enums import ModeId
 from app.control.model.registry import get as get_model_spec
 
 from .router import router
-from .helpers import get_client
+from .helpers import get_client, GROK_MODELS
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
 from core.utils import extract_text
@@ -54,6 +54,12 @@ async def chat_completions(
         )
 
     model = body.model or "grok-4.20-auto"
+    VALID_GROK_MODELS = {m["id"] for m in GROK_MODELS}
+    if model not in VALID_GROK_MODELS:
+        return JSONResponse(
+            {"error": {"message": f"Model '{model}' not supported. Supported: {sorted(VALID_GROK_MODELS)}", "type": "invalid_request_error", "code": "model_not_found"}},
+            status_code=400,
+        )
     mode_id = _resolve_mode_id(model)
     messages = [m.model_dump() for m in body.messages]
     stream = body.stream

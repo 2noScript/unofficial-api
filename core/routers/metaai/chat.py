@@ -49,6 +49,14 @@ async def chat_completions(
             status_code=503,
         )
 
+    VALID_META_MODELS = {"llama-4"}
+    model = body.model or "llama-4"
+    if model not in VALID_META_MODELS:
+        return JSONResponse(
+            {"error": f"Model '{model}' not supported. Supported: {sorted(VALID_META_MODELS)}"},
+            status_code=400,
+        )
+
     messages = [m.model_dump() for m in body.messages]
     stream = body.stream
     raw_prompt = extract_text(messages[-1].get("content")) if messages else ""
