@@ -18,10 +18,6 @@ class DeepSeekAdapter(BaseSessionAdapter):
         if sid:
             chat.chat_session_id = sid
             logger.debug('Injected deepseek chat_session_id: %s', str(sid)[:20])
-        pmid = data.get('deepseek_parent_message_id')
-        if pmid:
-            chat.parent_message_id = pmid
-            logger.debug('Injected deepseek parent_message_id: %s', str(pmid)[:20])
         return {}
 
     def extract(self, result: dict, data: dict) -> dict:
