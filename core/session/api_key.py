@@ -9,7 +9,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-API_KEY_PREFIX = 'ua'
+API_KEY_PREFIX = 'sk'
 API_KEY_SECRET = os.environ.get('API_KEY_SECRET', 'unofficial-api-key-secret')
 DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', Path.home() / '.unofficial-api'))
 KEYS_FILE = DATA_DIR / 'api_keys.json'
@@ -72,22 +72,22 @@ def validate_api_key(api_key: str) -> bool:
         if len(parts) < 2:
             logger.debug('Invalid API key format (too few parts)')
             return False
-            
+
         prefix = parts[0]
         if prefix != API_KEY_PREFIX:
             logger.debug('Invalid API key prefix: %s', prefix)
             return False
-            
+
         data = _load_keys()
         if api_key not in data.get('keys', {}):
             logger.debug('API key not found in store')
             return False
-            
+
         key_entry = data['keys'][api_key]
         if not key_entry.get('is_active', True):
             logger.debug('API key is deactivated')
             return False
-            
+
         machine_id = data['machine_id']
         if len(parts) == 4:
             _, mid, key_id, crc = parts
