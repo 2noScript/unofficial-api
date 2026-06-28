@@ -1,6 +1,7 @@
 """Test multi-turn session context across all providers."""
 
 import os
+import uuid
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
@@ -20,11 +21,15 @@ def session_app():
 
     @app.middleware("http")
     async def persistent_session_middleware(request: Request, call_next):
-        sid = request.headers.get("x-session-id", "default")
-        if sid not in SESSION_STORE:
-            SESSION_STORE[sid] = {}
-        request.state.session_data = SESSION_STORE[sid]
-        request.state.virtual_session_id = sid
+        sid = request.headers.get("x-session-id")
+        if sid is None:
+            request.state.session_data = {}
+            request.state.virtual_session_id = uuid.uuid4().hex
+        else:
+            if sid not in SESSION_STORE:
+                SESSION_STORE[sid] = {}
+            request.state.session_data = SESSION_STORE[sid]
+            request.state.virtual_session_id = sid
         return await call_next(request)
 
     from core.routers.deepseek import router as ds_router
@@ -435,3 +440,40 @@ class TestCrossSession:
             assert r2b.status_code == 200, r2b.text
             content_b = r2b.json()["choices"][0]["message"]["content"].lower()
             assert "bob" in content_b
+
+
+class TestNoSessionHeader:
+    def test_fresh_each_time(self, client):
+        """Without X-Session-Id, each request gets a fresh empty session,
+        so turn 2 has no context from turn 1."""
+        with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
+            instance = MockDS.return_value
+            call = [0]
+
+            def send(prompt, **kw):
+                call[0] += 1
+                n = call[0]
+                if n == 1:
+                    instance.chat_session_id = "ds-1"
+                    instance.parent_message_id = 2
+                    return {"ok": True, "content": {"response": f"ECHO: {prompt}", "thought": ""}}
+                return {"ok": True, "content": {"response": f"ECHO: {prompt}", "thought": ""}}
+
+            instance.send_message.side_effect = send
+
+            # Turn 1 — no X-Session-Id, fresh empty session
+            r1 = client.post("/v1/deepseek/chat/completions", json={
+                "model": "deepseek-v3", "stream": False,
+                "messages": [{"role": "user", "content": "Remember: my name is John"}],
+            }, headers={**AUTH})
+            assert r1.status_code == 200, r1.text
+
+            # Turn 2 — also no X-Session-Id, another fresh session
+            r2 = client.post("/v1/deepseek/chat/completions", json={
+                "model": "deepseek-v3", "stream": False,
+                "messages": [{"role": "user", "content": "What is my name?"}],
+            }, headers={**AUTH})
+            assert r2.status_code == 200, r2.text
+
+            content = r2.json()["choices"][0]["message"]["content"].lower()
+            assert "john" not in content
