@@ -12,7 +12,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from DeepSeekAPI import DeepSeekChat
+try:
+    from DeepSeekAPI import DeepSeekChat
+except ImportError:
+    DeepSeekChat = None
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
 from core.utils import extract_text, parse_cookie

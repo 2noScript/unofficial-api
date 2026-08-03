@@ -32,17 +32,41 @@ def session_app():
             request.state.virtual_session_id = sid
         return await call_next(request)
 
-    from core.routers.deepseek import router as ds_router
-    from core.routers.gemini import router as gm_router
-    from core.routers.grok import router as gk_router
-    from core.routers.metaai import router as ma_router
-    from core.routers.notebooklm import router as nl_router
+    try:
+        from core.routers.deepseek import router as ds_router
+    except ImportError:
+        ds_router = None
 
-    app.include_router(ds_router, prefix="/v1/deepseek")
-    app.include_router(gm_router, prefix="/v1/gemini")
-    app.include_router(gk_router, prefix="/v1/grok")
-    app.include_router(ma_router, prefix="/v1/metaai")
-    app.include_router(nl_router, prefix="/v1/notebooklm")
+    try:
+        from core.routers.gemini import router as gm_router
+    except ImportError:
+        gm_router = None
+
+    try:
+        from core.routers.grok import router as gk_router
+    except ImportError:
+        gk_router = None
+
+    try:
+        from core.routers.metaai import router as ma_router
+    except ImportError:
+        ma_router = None
+
+    try:
+        from core.routers.notebooklm import router as nl_router
+    except ImportError:
+        nl_router = None
+
+    if ds_router:
+        app.include_router(ds_router, prefix="/v1/deepseek")
+    if gm_router:
+        app.include_router(gm_router, prefix="/v1/gemini")
+    if gk_router:
+        app.include_router(gk_router, prefix="/v1/grok")
+    if ma_router:
+        app.include_router(ma_router, prefix="/v1/metaai")
+    if nl_router:
+        app.include_router(nl_router, prefix="/v1/notebooklm")
 
     app.state.gemini_client = MagicMock()
     app.state.notebooklm_client = AsyncMock()

@@ -20,16 +20,22 @@ from core.session.history import sync_and_get_history, append_assistant_message,
 
 
 def _build_chat_session(client: GeminiClient, session_data: dict) -> ChatSession:
-    """Create a ChatSession from stored session state, if any."""
-    metadata = session_data.get("gemini_metadata")
-    if metadata:
-        return ChatSession(geminiclient=client, metadata=metadata)
-    cid = session_data.get("gemini_cid", "")
-    return ChatSession(geminiclient=client, cid=cid)
+    """Create a ChatSession from stored session state using GeminiAdapter."""
+    adapter = get_adapter("gemini")
+    chat = adapter.inject(session_data, {"client": client, "chat_cls": ChatSession}).get("chat")
+    if chat:
+        return chat
+    return ChatSession(geminiclient=client)
 
 
 def _has_provider_session(session_data: dict) -> bool:
-    return bool(session_data.get("gemini_cid") or session_data.get("gemini_metadata"))
+    cid = session_data.get("gemini_cid")
+    if cid:
+        return True
+    metadata = session_data.get("gemini_metadata")
+    if metadata and isinstance(metadata, list) and len(metadata) > 0 and bool(metadata[0]):
+        return True
+    return False
 
 
 @router.post(
@@ -108,7 +114,6 @@ async def chat_completions(
 
         # Extract session data
         session_data.update(adapter.extract(chat, session_data))
-        session_data["gemini_metadata"] = chat.metadata
 
         content = output.text or ""
         thoughts = output.thoughts or ""
@@ -171,7 +176,7 @@ async def _stream_gemini(
                     first = False
         except Exception as e:
             err_str = str(e)
-            if attempt == 0 and _has_provider_session(session_data):
+            if attempt == 0 and _has_provider_session(session_data) and first:
                 logger.warning("Gemini stream session error, resetting: %s", err_str)
                 adapter.clear_provider_session(session_data)
                 session_error = True
@@ -188,7 +193,6 @@ async def _stream_gemini(
             yield make_stream_chunk(resolved_model, "", response_id, is_final=True)
 
         session_data.update(adapter.extract(chat, session_data))
-        session_data["gemini_metadata"] = chat.metadata
         full_text = "".join(collected)
         append_assistant_message(session_data, full_text)
 

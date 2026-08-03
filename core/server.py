@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API/src"))
+sys.path.insert(0, os.path.join(BASE, "..", "deepseek-api"))
+sys.path.insert(0, os.path.join(BASE, "..", "DeepSeek-API", "src"))
+sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API", "src"))
 sys.path.insert(0, os.path.join(BASE, "..", "metaai-api", "src"))
 sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
 
@@ -16,18 +18,52 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 from fastapi import FastAPI, Depends
 from fastapi.security import APIKeyHeader, HTTPBearer
 from fastapi.responses import JSONResponse, RedirectResponse
-from gemini_webapi import GeminiClient
 
-from notebooklm import NotebookLMClient
+try:
+    from gemini_webapi import GeminiClient
+except ImportError:
+    GeminiClient = None
 
-from metaai_api import MetaAI
-from core.routers.grok.client import GrokClient
+try:
+    from notebooklm import NotebookLMClient
+except ImportError:
+    NotebookLMClient = None
 
-from core.routers.deepseek import router as deepseek_router
-from core.routers.gemini import router as gemini_router
-from core.routers.notebooklm import router as notebooklm_router
-from core.routers.metaai import router as metaai_router
-from core.routers.grok import router as grok_router
+try:
+    from metaai_api import MetaAI
+except ImportError:
+    MetaAI = None
+
+try:
+    from core.routers.grok.client import GrokClient
+except ImportError:
+    GrokClient = None
+
+try:
+    from core.routers.deepseek import router as deepseek_router
+except ImportError:
+    deepseek_router = None
+
+try:
+    from core.routers.gemini import router as gemini_router
+except ImportError:
+    gemini_router = None
+
+try:
+    from core.routers.notebooklm import router as notebooklm_router
+except ImportError:
+    notebooklm_router = None
+
+try:
+    from core.routers.metaai import router as metaai_router
+except ImportError:
+    metaai_router = None
+
+try:
+    from core.routers.grok import router as grok_router
+except ImportError:
+    grok_router = None
+
 from core.routers.keys import router as keys_router
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -101,7 +137,7 @@ async def lifespan(app: FastAPI):
     secure_1psid = parse_cookie(gemini_cookie, "__Secure-1PSID")
     secure_1psidts = parse_cookie(gemini_cookie, "__Secure-1PSIDTS")
     gemini_client = None
-    if secure_1psid:
+    if GeminiClient and secure_1psid:
         gemini_client = GeminiClient(
             secure_1psid=secure_1psid, secure_1psidts=secure_1psidts,)
         try:
@@ -116,7 +152,7 @@ async def lifespan(app: FastAPI):
     notebooklm_ctx = None
     notebooklm_client = None
     storage_path = os.environ.get("NOTEBOOKLM_STORAGE_PATH")
-    if storage_path and os.path.exists(storage_path):
+    if NotebookLMClient and storage_path and os.path.exists(storage_path):
         try:
             notebooklm_ctx = NotebookLMClient.from_storage(path=storage_path)
             notebooklm_client = await notebooklm_ctx.__aenter__()
@@ -131,24 +167,25 @@ async def lifespan(app: FastAPI):
     # Meta AI
     meta_cookie = os.environ.get("META_AI_COOKIE") or ""
     metaai_client = None
-    cookies = {}
-    for key in ["datr", "abra_sess", "ecto_1_sess"]:
-        val = parse_cookie(meta_cookie, key)
-        if val:
-            cookies[key] = val
-    if cookies:
-        try:
-            metaai_client = MetaAI(cookies=cookies)
-        except Exception as e:
-            print(f"[MetaAI] Init failed: {e}", file=sys.stderr)
-            metaai_client = None
+    if MetaAI:
+        cookies = {}
+        for key in ["datr", "abra_sess", "ecto_1_sess"]:
+            val = parse_cookie(meta_cookie, key)
+            if val:
+                cookies[key] = val
+        if cookies:
+            try:
+                metaai_client = MetaAI(cookies=cookies)
+            except Exception as e:
+                print(f"[MetaAI] Init failed: {e}", file=sys.stderr)
+                metaai_client = None
 
     app.state.metaai_client = metaai_client
 
     # Grok
     grok_client = None
     grok_cookies_str = os.environ.get("GROK_COOKIE")
-    if grok_cookies_str:
+    if GrokClient and grok_cookies_str:
         try:
             grok_client = GrokClient(
                 cookies_str=grok_cookies_str,
@@ -197,11 +234,16 @@ session_middleware = VirtualSessionMiddleware(
 )
 app.add_middleware(BaseHTTPMiddleware, dispatch=session_middleware)
 
-app.include_router(deepseek_router, prefix="/v1/deepseek")
-app.include_router(gemini_router, prefix="/v1/gemini")
-app.include_router(notebooklm_router, prefix="/v1/notebooklm")
-app.include_router(metaai_router, prefix="/v1/metaai")
-app.include_router(grok_router, prefix="/v1/grok")
+if deepseek_router:
+    app.include_router(deepseek_router, prefix="/v1/deepseek")
+if gemini_router:
+    app.include_router(gemini_router, prefix="/v1/gemini")
+if notebooklm_router:
+    app.include_router(notebooklm_router, prefix="/v1/notebooklm")
+if metaai_router:
+    app.include_router(metaai_router, prefix="/v1/metaai")
+if grok_router:
+    app.include_router(grok_router, prefix="/v1/grok")
 app.include_router(keys_router, prefix="/v1/keys")
 
 
