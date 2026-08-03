@@ -142,7 +142,7 @@ def format_prompt_with_history(
         A single string that can be passed as the ``prompt`` / ``message``
         parameter to the provider SDK.
     """
-    # Only include turns before the current one (avoid duplicate)
+    system_msgs = [m for m in history if m.get("role") == "system"]
     prior = [m for m in history if m.get("role") != "system"]
     # If the last entry is the user message for the current turn, exclude it
     if prior and prior[-1].get("role") == "user":
@@ -150,16 +150,23 @@ def format_prompt_with_history(
         if last_content.strip() == current_user_prompt.strip():
             prior = prior[:-1]
 
-    if not prior:
-        return current_user_prompt  # No prior history → send as-is
+    lines = []
+    if system_msgs:
+        sys_content = extract_text(system_msgs[0].get("content", ""))
+        if sys_content:
+            lines.append(f"[System Instruction]\n{sys_content}\n")
 
-    lines = ["[Previous conversation]"]
-    for msg in prior:
-        role = msg.get("role", "unknown").capitalize()
-        content = extract_text(msg.get("content", ""))
-        lines.append(f"{role}: {content}")
+    if not prior and not lines:
+        return current_user_prompt
 
-    lines.append("")
+    if prior:
+        lines.append("[Previous conversation]")
+        for msg in prior:
+            role = msg.get("role", "unknown").capitalize()
+            content = extract_text(msg.get("content", ""))
+            lines.append(f"{role}: {content}")
+        lines.append("")
+
     lines.append("[Current message]")
     lines.append(current_user_prompt)
 
