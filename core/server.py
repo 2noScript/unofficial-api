@@ -16,6 +16,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader, HTTPBearer
 from fastapi.responses import JSONResponse, RedirectResponse
 
@@ -222,7 +223,15 @@ app = FastAPI(
         "Set environment variables in `.env` file before making requests."
     ),
     lifespan=lifespan,
-    dependencies=[Depends(security_bearer), Depends(api_key_header)],
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_origin_regex=".*",
 )
 
 session_middleware = VirtualSessionMiddleware(

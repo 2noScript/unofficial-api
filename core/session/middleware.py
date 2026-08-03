@@ -38,6 +38,9 @@ class VirtualSessionMiddleware:
             return {}
 
     async def __call__(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         path = request.url.path.rstrip('/')
         
         if not any(path.endswith(p) for p in CHAT_PATHS):
