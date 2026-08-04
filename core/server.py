@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import APIKeyHeader, HTTPBearer
+from fastapi.security import HTTPBearer
 from fastapi.responses import JSONResponse, RedirectResponse
 
 try:
@@ -75,7 +75,7 @@ from core.session import (
     get_api_key_hash,
     VirtualSessionMiddleware
 )
-from core.utils import parse_cookie
+from core.utils import parse_cookie, validate_env
 
 
 def _extract_provider(path: str) -> str:
@@ -83,49 +83,6 @@ def _extract_provider(path: str) -> str:
     if len(parts) >= 2 and parts[0] == 'v1':
         return parts[1]
     return 'unknown'
-
-
-def validate_env():
-    errors = []
-
-    if os.environ.get("DEEPSEEK_COOKIE") or os.environ.get("DEEPSEEK_AUTH_TOKEN"):
-        dc = os.environ.get("DEEPSEEK_COOKIE") or ""
-        if not parse_cookie(dc, "ds_session_id"):
-            errors.append("DeepSeek: missing ds_session_id. Set DEEPSEEK_COOKIE=\"ds_session_id=...\"")
-        if not os.environ.get("DEEPSEEK_AUTH_TOKEN"):
-            errors.append("DeepSeek: missing auth token. Set DEEPSEEK_AUTH_TOKEN")
-
-    if os.environ.get("GEMINI_COOKIE"):
-        gc = os.environ.get("GEMINI_COOKIE") or ""
-        if not parse_cookie(gc, "__Secure-1PSID"):
-            errors.append("Gemini: missing __Secure-1PSID. Set GEMINI_COOKIE=\"__Secure-1PSID=...\"")
-        # __Secure-1PSIDTS is optional
-
-    if os.environ.get("META_AI_COOKIE"):
-        mc = os.environ.get("META_AI_COOKIE") or ""
-        for key in ["datr", "abra_sess", "ecto_1_sess"]:
-            if not parse_cookie(mc, key):
-                errors.append(f"Meta AI: missing {key}. Set META_AI_COOKIE=\"...; {key}=...\"")
-
-    if os.environ.get("GROK_COOKIE") or os.environ.get("GROK_PROXY_USER_AGENT") or os.environ.get("GROK_PROXY_BROWSER"):
-        if not os.environ.get("GROK_COOKIE"):
-            errors.append("Grok: missing cookie string. Set GROK_COOKIE")
-
-    if os.environ.get("NOTEBOOKLM_STORAGE_PATH") or os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID"):
-        sp = os.environ.get("NOTEBOOKLM_STORAGE_PATH")
-        if sp and not os.path.exists(sp):
-            errors.append(f"NotebookLM: storage path not found: {sp}")
-        if sp and not os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID"):
-            errors.append("NotebookLM: missing default notebook ID. Set NOTEBOOKLM_DEFAULT_NOTEBOOK_ID")
-
-    if errors:
-        msg = "\n".join(
-            ["", "=" * 60, "  ENVIRONMENT VARIABLE ERRORS", "=" * 60]
-            + [f"  \u2022 {e}" for e in errors]
-            + ["=" * 60]
-        )
-        print(msg, file=sys.stderr)
-        sys.exit(1)
 
 
 validate_env()
@@ -207,21 +164,12 @@ async def lifespan(app: FastAPI):
 
 
 security_bearer = HTTPBearer(auto_error=False)
-api_key_header = APIKeyHeader(name="X-Api-Key", auto_error=False)
 
 app = FastAPI(
     title="Unofficial API Gateway",
     version="0.1.0",
-    description=(
-        "OpenAI-compatible API for DeepSeek, Gemini, NotebookLM, Meta AI, and Grok.\n\n"
-        "- **DeepSeek**: `deepseek-v3`, `deepseek-r1`, `deepseek-v4`, `deepseek-r4`\n"
-        "- **Gemini**: `gemini-3-flash`, `gemini-3-pro`, `gemini-3-flash-thinking`, and more\n"
-        "- **NotebookLM**: `notebooklm-2-0` (source-grounded Q&A)\n"
-        "- **Meta AI**: `llama-4` (chat, image generation, video generation)\n"
-        "- **Grok**: `grok-4.20-auto`, `grok-4.20-fast`, `grok-4.20-reasoning`, `grok-4.3-beta`, and more (15+ models)\n\n"
-        "### Authentication\n"
-        "Set environment variables in `.env` file before making requests."
-    ),
+    description="OpenAI-compatible API Gateway for DeepSeek, Gemini, NotebookLM, Meta AI, and Grok.",
+    dependencies=[Depends(security_bearer)],
     lifespan=lifespan,
 )
 
