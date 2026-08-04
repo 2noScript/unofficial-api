@@ -24,10 +24,10 @@ class DeepSeekAdapter(BaseSessionAdapter):
             logger.debug('Injected deepseek parent_message_id: %s', str(pid)[:20])
         return {}
 
-    def extract(self, result: dict, data: dict) -> dict:
+    def extract(self, response: dict, data: dict) -> dict:
         """Extract and persist DeepSeek session state after a response."""
         new_data = dict(data)
-        chat = result.get('_chat_instance')
+        chat = response.get('_chat_instance')
         if not chat:
             return new_data
         if getattr(chat, 'chat_session_id', None):

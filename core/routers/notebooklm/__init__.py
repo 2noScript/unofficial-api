@@ -1,2 +1,2 @@
 from .router import router
-from . import models, chat, artifacts
+from . import models, chat
