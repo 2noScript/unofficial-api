@@ -21,6 +21,6 @@ RUN mkdir -p /data
 ENV UNOFFICIAL_API_DATA_DIR=/data
 
 ENV PATH="/app/.venv/bin:$PATH"
-EXPOSE 8000
-CMD ["uvicorn", "core.server:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8088
+CMD ["uvicorn", "core.server:app", "--host", "0.0.0.0", "--port", "8088"]
 

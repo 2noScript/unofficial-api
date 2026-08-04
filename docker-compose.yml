@@ -2,7 +2,7 @@ services:
   unofficial-api:
     image: 2noscript/unofficial-api:latest
     ports:
-      - "8000:8000"
+      - "8088:8088"
     env_file:
       - .env
     volumes:

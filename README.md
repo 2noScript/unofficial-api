@@ -31,10 +31,10 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta 
    # or
    docker compose up -d      # Docker
    ```
-4. Open Swagger UI: http://localhost:8000/docs
+4. Open Swagger UI: http://localhost:8088/docs
 5. Generate an API key (required for all chat requests):
    ```bash
-   curl -X POST http://localhost:8000/v1/keys/generate \
+   curl -X POST http://localhost:8088/v1/keys/generate \
      -H "Content-Type: application/json" \
      -d '{"name": "my-key"}'
    ```
@@ -157,37 +157,37 @@ Replace `YOUR_API_KEY` with a key from `POST /v1/keys/generate`.
 
 ```bash
 # DeepSeek
-curl -s http://localhost:8000/v1/deepseek/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -s http://localhost:8088/v1/deepseek/chat/completions \
+  -H "Authorization: Bearer <key>" \
   -H "Content-Type: application/json" \
-  -d '{"model": "deepseek-v3", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "deepseek-v3", "messages": [{"role": "user", "content": "Hi"}]}'
 
 # Gemini
-curl -s http://localhost:8000/v1/gemini/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -s http://localhost:8088/v1/gemini/chat/completions \
+  -H "Authorization: Bearer <key>" \
   -H "Content-Type: application/json" \
-  -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hi"}]}'
 
 # Grok
-curl -s http://localhost:8000/v1/grok/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -s http://localhost:8088/v1/grok/chat/completions \
+  -H "Authorization: Bearer <key>" \
   -H "Content-Type: application/json" \
-  -d '{"model": "grok-4.20-auto", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "grok-4.20-auto", "messages": [{"role": "user", "content": "Hi"}]}'
 
 # Meta AI
-curl -s http://localhost:8000/v1/metaai/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -s http://localhost:8088/v1/metaai/chat/completions \
+  -H "Authorization: Bearer <key>" \
   -H "Content-Type: application/json" \
-  -d '{"model": "llama-4", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "llama-4", "messages": [{"role": "user", "content": "Hi"}]}'
 
 # NotebookLM
-curl -s http://localhost:8000/v1/notebooklm/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -s http://localhost:8088/v1/notebooklm/chat/completions \
+  -H "Authorization: Bearer <key>" \
   -H "Content-Type: application/json" \
-  -d '{"model": "notebooklm-2-0", "messages": [{"role": "user", "content": "Summarize the sources"}]}'
+  -d '{"model": "notebooklm-2-0", "messages": [{"role": "user", "content": "Hi"}]}'
 
-# Continue a conversation (pass X-Session-Id from a previous response)
-curl -s http://localhost:8000/v1/gemini/chat/completions \
+# Session persistence (same X-Session-Id keeps multi-turn history per provider)
+curl -s http://localhost:8088/v1/gemini/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "X-Session-Id: <session-id-from-previous-response>" \
   -H "Content-Type: application/json" \
