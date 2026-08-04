@@ -42,6 +42,11 @@ except ImportError:
 from core.routers.keys import router as keys_router
 
 
+import uuid
+
+SESSION_STORE: dict[str, dict] = {}
+
+
 @asynccontextmanager
 async def noop_lifespan(app: FastAPI):
     app.state.gemini_client = MagicMock()
@@ -51,14 +56,21 @@ async def noop_lifespan(app: FastAPI):
     yield
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def app():
     app = FastAPI(lifespan=noop_lifespan)
 
     @app.middleware("http")
     async def fake_session_middleware(request: Request, call_next):
-        request.state.session_data = {}
-        request.state.virtual_session_id = "test-vid"
+        sid = request.headers.get("x-session-id")
+        if sid is None:
+            request.state.session_data = {}
+            request.state.virtual_session_id = uuid.uuid4().hex
+        else:
+            if sid not in SESSION_STORE:
+                SESSION_STORE[sid] = {}
+            request.state.session_data = SESSION_STORE[sid]
+            request.state.virtual_session_id = sid
         return await call_next(request)
 
     if ds_router:
@@ -93,8 +105,10 @@ def app():
 
 @pytest.fixture
 def client(app):
+    SESSION_STORE.clear()
     with TestClient(app) as c:
         yield c
+    SESSION_STORE.clear()
 
 
 @pytest.fixture

@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 from fastapi import Request, Response
@@ -53,19 +54,27 @@ class VirtualSessionMiddleware:
         if not api_key:
             api_key = request.headers.get('x-api-key')
             
+        disable_auth = (
+            os.environ.get("DISABLE_AUTH", "").lower() in ("true", "1", "yes")
+            or os.environ.get("REQUIRE_API_KEY", "").lower() in ("false", "0")
+        )
+
         if not api_key:
-            return JSONResponse(
-                status_code=401,
-                content={
-                    "error": {
-                        "message": "API key required. Set Authorization: Bearer <key> or X-Api-Key header.",
-                        "type": "auth_error",
-                        "code": "missing_api_key"
+            if disable_auth:
+                api_key = "dev-key"
+            else:
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": {
+                            "message": "API key required. Set Authorization: Bearer <key> or X-Api-Key header.",
+                            "type": "auth_error",
+                            "code": "missing_api_key"
+                        }
                     }
-                }
-            )
+                )
             
-        if not self.validate_key(api_key):
+        if not disable_auth and not self.validate_key(api_key):
             return JSONResponse(
                 status_code=401,
                 content={

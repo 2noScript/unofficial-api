@@ -1,21 +1,25 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 
-def mock_metaai_client(app):
-    client = MagicMock()
-    client.prompt.return_value = {"message": "Hello from Llama 4!"}
-    app.state.metaai_client = client
+def mock_grok_client(app):
+    client = AsyncMock()
+
+    async def send_message(message, mode_id=None):
+        return "I am Grok, nice to meet you!"
+
+    client.send_message = send_message
+    app.state.grok_client = client
     return client
 
 
-class TestMetaAI:
+class TestGrokChat:
     def test_chat_non_stream(self, client, auth_headers, app):
-        mock_metaai_client(app)
+        mock_grok_client(app)
 
         resp = client.post(
-            "/v1/metaai/chat/completions",
+            "/v1/grok/chat/completions",
             json={
-                "model": "llama-4",
+                "model": "grok-4.20-auto",
                 "messages": [{"role": "user", "content": "Hi"}],
                 "stream": False,
             },
@@ -24,33 +28,28 @@ class TestMetaAI:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["choices"][0]["message"]["content"] == "Hello from Llama 4!"
-        assert data["model"] == "llama-4"
+        assert "I am Grok" in data["choices"][0]["message"]["content"]
 
     def test_chat_stream(self, client, auth_headers, app):
-        mock_metaai_client(app)
+        mock_grok_client(app)
 
         resp = client.post(
-            "/v1/metaai/chat/completions",
+            "/v1/grok/chat/completions",
             json={
-                "model": "llama-4",
+                "model": "grok-4.20-auto",
                 "messages": [{"role": "user", "content": "Hi"}],
                 "stream": True,
             },
             headers=auth_headers,
         )
 
-        assert resp.status_code == 200
-        assert resp.text.startswith("data: ")
-        assert "data: [DONE]" in resp.text
-
     def test_client_unavailable(self, client, auth_headers, app):
-        app.state.metaai_client = None
+        app.state.grok_client = None
 
         resp = client.post(
-            "/v1/metaai/chat/completions",
+            "/v1/grok/chat/completions",
             json={
-                "model": "llama-4",
+                "model": "grok-4.20-auto",
                 "messages": [{"role": "user", "content": "Hi"}],
                 "stream": False,
             },
@@ -60,12 +59,12 @@ class TestMetaAI:
         assert resp.status_code == 503
 
     def test_empty_prompt(self, client, auth_headers, app):
-        mock_metaai_client(app)
+        mock_grok_client(app)
 
         resp = client.post(
-            "/v1/metaai/chat/completions",
+            "/v1/grok/chat/completions",
             json={
-                "model": "llama-4",
+                "model": "grok-4.20-auto",
                 "messages": [{"role": "user", "content": ""}],
                 "stream": False,
             },

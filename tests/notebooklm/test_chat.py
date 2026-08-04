@@ -29,7 +29,7 @@ def mock_notebooklm_client(app):
     return client
 
 
-class TestNotebookLM:
+class TestNotebookLMChat:
     def test_chat_non_stream(self, client, auth_headers, app, monkeypatch):
         mock_notebooklm_client(app)
         monkeypatch.setenv("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID", "nb-123")
