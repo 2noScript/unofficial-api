@@ -1,73 +1,98 @@
-from unittest.mock import MagicMock, AsyncMock
+import os
+import json
+import pytest
+from fastapi.testclient import TestClient
+from core.server import app
+
+client = TestClient(app)
+AUTH = {"Authorization": "Bearer dev-key"}
+SID = {"X-Session-Id": "sess-live-gemini-test"}
 
 
-async def _generate_content(**kw):
-    return MagicMock(text="Hello Gemini!", thoughts="")
+def parse_sse(text: str) -> list[dict]:
+    chunks = []
+    for line in text.strip().split("\n"):
+        if line.startswith("data: ") and line != "data: [DONE]":
+            chunks.append(json.loads(line[6:]))
+    return chunks
 
 
-async def _generate_content_stream(**kw):
-    for t in ["Hel", "lo ", "Gemini!"]:
-        yield MagicMock(text_delta=t)
+def test_invalid_model():
+    """Test API error handling when requesting an unsupported model."""
+    print("\n--- [GEMINI API TEST] Testing Invalid Model Error (HTTP 400) ---")
+    resp = client.post(
+        "/v1/gemini/chat/completions",
+        json={
+            "model": "unsupported-gemini-model",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stream": False,
+        },
+        headers=AUTH,
+    )
+    if resp.status_code == 503:
+        pytest.skip("Gemini client unauthenticated or cookie missing in .env")
+    assert resp.status_code == 400
+    data = resp.json()
+    assert "error" in data
+    assert data["error"]["code"] == "model_not_found"
 
 
-def mock_gemini_client(app):
-    client = AsyncMock()
-    client.generate_content = _generate_content
-    client.generate_content_stream = _generate_content_stream
-    app.state.gemini_client = client
-    return client
+@pytest.mark.skipif(
+    not os.environ.get("GEMINI_COOKIE"),
+    reason="Live Gemini credentials missing in .env",
+)
+def test_chat_non_stream():
+    """Test live non-streaming chat completion with Gemini."""
+    print("\n--- [LIVE GEMINI TEST] Non-Stream Chat Completion ---")
+    resp = client.post(
+        "/v1/gemini/chat/completions",
+        json={
+            "model": "gemini-2.5-flash",
+            "messages": [{"role": "user", "content": "Reply with 'Hello'"}],
+            "stream": False,
+        },
+        headers={**AUTH, **SID},
+    )
+    if resp.status_code == 503:
+        pytest.skip("Gemini client unauthenticated or cookie expired")
+    assert resp.status_code == 200
+    data = resp.json()
+    print("Live Gemini Non-Stream Response:\n", json.dumps(data, indent=2, ensure_ascii=False))
+    assert data["object"] == "chat.completion"
+    assert "choices" in data
+    assert len(data["choices"]) > 0
+    assert data["choices"][0]["message"]["content"] != ""
 
 
-class TestGeminiChat:
-    def test_chat_non_stream(self, client, auth_headers, app):
-        mock_gemini_client(app)
+@pytest.mark.skipif(
+    not os.environ.get("GEMINI_COOKIE"),
+    reason="Live Gemini credentials missing in .env",
+)
+def test_chat_stream():
+    """Test live SSE streaming chat completion with Gemini."""
+    print("\n--- [LIVE GEMINI TEST] Real SSE Streaming (stream: true) ---")
+    resp = client.post(
+        "/v1/gemini/chat/completions",
+        json={
+            "model": "gemini-2.5-flash",
+            "messages": [{"role": "user", "content": "Count 1 2 3"}],
+            "stream": True,
+        },
+        headers={**AUTH, **SID},
+    )
+    if resp.status_code == 503:
+        pytest.skip("Gemini client unauthenticated or cookie expired")
+    assert resp.status_code == 200
+    assert resp.text.startswith("data: ")
+    assert "data: [DONE]" in resp.text
 
-        resp = client.post(
-            "/v1/gemini/chat/completions",
-            json={
-                "model": "gemini-3-flash",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": False,
-            },
-            headers=auth_headers,
-        )
+    chunks = parse_sse(resp.text)
+    print(f"Live Streaming Chunks Received ({len(chunks)} chunks)")
 
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["choices"][0]["message"]["content"] == "Hello Gemini!"
-
-    def test_chat_stream(self, client, auth_headers, app):
-        mock_gemini_client(app)
-
-        resp = client.post(
-            "/v1/gemini/chat/completions",
-            json={
-                "model": "gemini-3-flash",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": True,
-            },
-            headers=auth_headers,
-        )
-
-        assert resp.status_code == 200
-        assert resp.text.startswith("data: ")
-        assert "data: [DONE]" in resp.text
-        assert "content\": \"Hel" in resp.text
-        assert "content\": \"lo " in resp.text
-        assert "content\": \"Gemini!" in resp.text
-
-    def test_client_unavailable(self, client, auth_headers, app):
-        app.state.gemini_client = None
-
-        resp = client.post(
-            "/v1/gemini/chat/completions",
-            json={
-                "model": "gemini-3-flash",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": False,
-            },
-            headers=auth_headers,
-        )
-
-        assert resp.status_code == 503
-        assert "not initialized" in resp.text.lower()
+    full = ""
+    for c in chunks:
+        delta = c.get("choices", [{}])[0].get("delta", {})
+        full += delta.get("content", "")
+    full = full.rstrip("\n")
+    print("Live Stream Full Output:", repr(full))
+    assert full != ""

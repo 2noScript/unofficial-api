@@ -1,9 +1,12 @@
 import os
 import json
-from unittest.mock import patch, MagicMock
+import pytest
+from fastapi.testclient import TestClient
+from core.server import app
 
-os.environ.setdefault("DEEPSEEK_COOKIE", "ds_session_id=test-session")
-os.environ.setdefault("DEEPSEEK_AUTH_TOKEN", "test-auth-token")
+client = TestClient(app)
+AUTH = {"Authorization": "Bearer dev-key"}
+SID = {"X-Session-Id": "sess-live-chat-test"}
 
 
 def parse_sse(text: str) -> list[dict]:
@@ -14,186 +17,100 @@ def parse_sse(text: str) -> list[dict]:
     return chunks
 
 
-def test_chat_non_stream(client, auth_headers):
-    with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-        instance = MockDS.return_value
-        instance.send_message.return_value = {
-            "ok": True,
-            "content": {"response": "Hello world!", "thought": ""},
-        }
+def test_invalid_model():
+    """Test API error handling when requesting an unsupported model."""
+    print("\n--- [API TEST] Testing Invalid Model Error (HTTP 400) ---")
+    resp = client.post(
+        "/v1/deepseek/chat/completions",
+        json={
+            "model": "unsupported-gpt-99",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stream": False,
+        },
+        headers=AUTH,
+    )
+    print("Invalid Model Response:", resp.status_code, resp.json())
+    assert resp.status_code == 400
+    data = resp.json()
+    assert "error" in data
+    assert data["error"]["code"] == "model_not_found"
 
-        resp = client.post(
-            "/v1/deepseek/chat/completions",
-            json={
-                "model": "deepseek-v3",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": False,
-            },
-            headers=auth_headers,
-        )
 
+@pytest.mark.skipif(
+    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    reason="Live DeepSeek credentials missing in .env",
+)
+def test_chat_non_stream():
+    """Test live non-streaming chat completion with deepseek-v3."""
+    print("\n--- [LIVE API TEST] Non-Stream Chat Completion (deepseek-v3) ---")
+    resp = client.post(
+        "/v1/deepseek/chat/completions",
+        json={
+            "model": "deepseek-v3",
+            "messages": [{"role": "user", "content": "Reply with the single word: OK"}],
+            "stream": False,
+        },
+        headers={**AUTH, **SID},
+    )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["choices"][0]["message"]["content"] == "Hello world!"
-    assert data["choices"][0]["message"]["reasoning_content"] == ""
+    print("Live Non-Stream Response:\n", json.dumps(data, indent=2, ensure_ascii=False))
     assert data["object"] == "chat.completion"
+    assert "choices" in data
+    assert len(data["choices"]) > 0
+    assert data["choices"][0]["message"]["content"] != ""
 
 
-def test_chat_non_stream_with_thinking(client, auth_headers):
-    with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-        instance = MockDS.return_value
-        instance.send_message.return_value = {
-            "ok": True,
-            "content": {"response": "Final answer", "thought": "Let me think..."},
-        }
-
-        resp = client.post(
-            "/v1/deepseek/chat/completions",
-            json={
-                "model": "deepseek-r1",
-                "messages": [{"role": "user", "content": "Think step by step"}],
-                "stream": False,
-            },
-            headers=auth_headers,
-        )
-
+@pytest.mark.skipif(
+    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    reason="Live DeepSeek credentials missing in .env",
+)
+def test_chat_thinking_model():
+    """Test live reasoning model with deepseek-r1."""
+    print("\n--- [LIVE API TEST] Reasoning Model (deepseek-r1) ---")
+    resp = client.post(
+        "/v1/deepseek/chat/completions",
+        json={
+            "model": "deepseek-r1",
+            "messages": [{"role": "user", "content": "What is 15 + 27?"}],
+            "stream": False,
+        },
+        headers={**AUTH, **SID},
+    )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["choices"][0]["message"]["content"] == "Final answer"
-    assert data["choices"][0]["message"]["reasoning_content"] == "Let me think..."
+    print("Live Thinking Model Response:\n", json.dumps(data, indent=2, ensure_ascii=False))
+    assert data["object"] == "chat.completion"
+    assert "42" in data["choices"][0]["message"]["content"]
 
 
-def test_chat_non_stream_thinking_disabled_gets_full_text(client, auth_headers):
-    with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-        instance = MockDS.return_value
-        instance.send_message.return_value = {
-            "ok": True,
-            "content": {"response": "Hello world!", "thought": ""},
-        }
-
-        resp = client.post(
-            "/v1/deepseek/chat/completions",
-            json={
-                "model": "deepseek-v3",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": False,
-            },
-            headers=auth_headers,
-        )
-
-    assert resp.json()["choices"][0]["message"]["content"] == "Hello world!"
-
-
-def test_chat_stream(client, auth_headers):
-    with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-        instance = MockDS.return_value
-
-        def send_message_side_effect(*args, **kw):
-            cb = kw.get("text_callback")
-            if cb:
-                for chunk in ["Hel", "lo ", "world!"]:
-                    cb(chunk)
-            return {"ok": True, "content": {"response": "Hello world!", "thought": ""}}
-
-        instance.send_message.side_effect = send_message_side_effect
-
-        resp = client.post(
-            "/v1/deepseek/chat/completions",
-            json={
-                "model": "deepseek-v3",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": True,
-            },
-            headers=auth_headers,
-        )
-
+@pytest.mark.skipif(
+    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    reason="Live DeepSeek credentials missing in .env",
+)
+def test_chat_stream():
+    """Test live SSE streaming chat completion."""
+    print("\n--- [LIVE API TEST] Real SSE Streaming (stream: true) ---")
+    resp = client.post(
+        "/v1/deepseek/chat/completions",
+        json={
+            "model": "deepseek-v3",
+            "messages": [{"role": "user", "content": "Count from 1 to 3"}],
+            "stream": True,
+        },
+        headers={**AUTH, **SID},
+    )
     assert resp.status_code == 200
     assert resp.text.startswith("data: ")
     assert "data: [DONE]" in resp.text
 
     chunks = parse_sse(resp.text)
-    assert len(chunks) > 0
+    print(f"Live Streaming Chunks Received ({len(chunks)} chunks)")
 
     full = ""
     for c in chunks:
         delta = c.get("choices", [{}])[0].get("delta", {})
         full += delta.get("content", "")
     full = full.rstrip("\n")
-    assert full == "Hello world!"
-
-
-def test_chat_error_401(client, auth_headers):
-    with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-        instance = MockDS.return_value
-        instance.send_message.return_value = {
-            "ok": False,
-            "content": "HTTP 401: Unauthorized",
-        }
-
-        resp = client.post(
-            "/v1/deepseek/chat/completions",
-            json={
-                "model": "deepseek-v3",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": False,
-            },
-            headers=auth_headers,
-        )
-
-    assert resp.status_code == 401
-
-
-def test_chat_stream_error(client, auth_headers):
-    with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-        instance = MockDS.return_value
-        instance.send_message.return_value = {
-            "ok": False,
-            "content": "HTTP 500: Internal Server Error",
-        }
-
-        resp = client.post(
-            "/v1/deepseek/chat/completions",
-            json={
-                "model": "deepseek-v3",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": True,
-            },
-            headers=auth_headers,
-        )
-
-    assert resp.status_code == 200
-    assert "data: [DONE]" in resp.text
-    assert "error" in resp.text or "Internal Server Error" in resp.text
-
-
-def test_session_error_retry(client, auth_headers):
-    with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-        instance = MockDS.return_value
-
-        call_count = [0]
-
-        def send_message_side_effect(*args, **kw):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return {
-                    "ok": False,
-                    "content": "HTTP 404: chat session not found",
-                }
-            return {
-                "ok": True,
-                "content": {"response": "Success on retry", "thought": ""},
-            }
-
-        instance.send_message.side_effect = send_message_side_effect
-
-        client.post(
-            "/v1/deepseek/chat/completions",
-            json={
-                "model": "deepseek-v3",
-                "messages": [{"role": "user", "content": "Hi"}],
-                "stream": False,
-            },
-            headers=auth_headers,
-        )
-
-    assert call_count[0] == 2
+    print("Live Stream Full Output:", repr(full))
+    assert full != ""

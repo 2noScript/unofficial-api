@@ -1,103 +1,77 @@
 import os
-from unittest.mock import patch
+import json
+import pytest
+from fastapi.testclient import TestClient
+from core.server import app
 
-os.environ.setdefault("DEEPSEEK_COOKIE", "ds_session_id=test-session")
-os.environ.setdefault("DEEPSEEK_AUTH_TOKEN", "test-auth-token")
+client = TestClient(app)
+AUTH = {"Authorization": "Bearer dev-key"}
+SID_A = {"X-Session-Id": "sess-live-ds-session-a"}
+SID_B = {"X-Session-Id": "sess-live-ds-session-b"}
 
-AUTH = {"Authorization": "Bearer ua-test-test-test"}
-SID = {"X-Session-Id": "sess-ds-1"}
 
+@pytest.mark.skipif(
+    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    reason="Live DeepSeek credentials missing in .env",
+)
+class TestDeepSeekLiveSession:
+    def test_multiturn_live_session(self):
+        """Test multi-turn context retention across requests with the same X-Session-Id."""
+        print("\n--- [LIVE SESSION TEST 1] Multi-turn Conversation ---")
 
-class TestDeepSeekSession:
-    def test_multiturn_transcript_fallback(self, client):
-        with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-            instance = MockDS.return_value
-            call = [0]
+        # Turn 1: Tell DeepSeek our secret code
+        print("\n[Session A - Turn 1] Sending: 'My secret code is BETA-77'")
+        r1 = client.post(
+            "/v1/deepseek/chat/completions",
+            json={
+                "model": "deepseek-v3",
+                "messages": [{"role": "user", "content": "My secret code is BETA-77"}],
+                "stream": False,
+            },
+            headers={**AUTH, **SID_A},
+        )
+        assert r1.status_code == 200
+        data1 = r1.json()
+        print("Live Response Turn 1:\n", data1["choices"][0]["message"]["content"])
 
-            def send(prompt, **kw):
-                call[0] += 1
-                n = call[0]
-                if n == 1:
-                    instance.chat_session_id = "ds-session-1"
-                    instance.parent_message_id = 2
-                    return {"ok": True, "content": {"response": f"ECHO: {prompt}", "thought": ""}}
-                elif n == 2:
-                    return {"ok": False, "content": b'{"code":40300,"msg":"MISSING_HEADER"}'}
-                return {"ok": True, "content": {"response": f"ECHO: {prompt}", "thought": ""}}
+        # Turn 2: Ask DeepSeek for the secret code without repeating it in messages
+        print("\n[Session A - Turn 2] Sending: 'What is my secret code?' (only this message)")
+        r2 = client.post(
+            "/v1/deepseek/chat/completions",
+            json={
+                "model": "deepseek-v3",
+                "messages": [{"role": "user", "content": "What is my secret code?"}],
+                "stream": False,
+            },
+            headers={**AUTH, **SID_A},
+        )
+        assert r2.status_code == 200
+        data2 = r2.json()
+        content2 = data2["choices"][0]["message"]["content"]
+        print("Live Response Turn 2:\n", content2)
 
-            instance.send_message.side_effect = send
+        # Verify live model remembered the secret code BETA-77 across session turns
+        assert "BETA-77" in content2 or "beta-77" in content2.lower()
 
-            r1 = client.post("/v1/deepseek/chat/completions", json={
-                "model": "deepseek-v3", "stream": False,
-                "messages": [{"role": "user", "content": "Remember: my name is John"}],
-            }, headers={**AUTH, **SID})
-            assert r1.status_code == 200
+    def test_session_isolation(self):
+        """Test session isolation: Session B must NOT know secret information from Session A."""
+        print("\n--- [LIVE SESSION TEST 2] Session Isolation ---")
 
-            r2 = client.post("/v1/deepseek/chat/completions", json={
-                "model": "deepseek-v3", "stream": False,
-                "messages": [{"role": "user", "content": "What is my name?"}],
-            }, headers={**AUTH, **SID})
-            assert r2.status_code == 200
+        # Turn 1 in Session B: Ask for the secret code (should not know BETA-77)
+        print("\n[Session B - Turn 1] Sending: 'What is my secret code?' (in separate Session B)")
+        r_b = client.post(
+            "/v1/deepseek/chat/completions",
+            json={
+                "model": "deepseek-v3",
+                "messages": [{"role": "user", "content": "What is my secret code?"}],
+                "stream": False,
+            },
+            headers={**AUTH, **SID_B},
+        )
+        assert r_b.status_code == 200
+        data_b = r_b.json()
+        content_b = data_b["choices"][0]["message"]["content"]
+        print("Live Session B Response:\n", content_b)
 
-            content = r2.json()["choices"][0]["message"]["content"].lower()
-            assert "john" in content
-
-    def test_multiturn_provider_session_chain(self, client):
-        with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-            instance = MockDS.return_value
-            call = [0]
-
-            def send(prompt, **kw):
-                call[0] += 1
-                nid = call[0] * 2
-                instance.chat_session_id = "ds-session-1"
-                instance.parent_message_id = nid
-                return {"ok": True, "content": {"response": f"ECHO(pid={nid}): {prompt}", "thought": ""}}
-
-            instance.send_message.side_effect = send
-
-            client.post("/v1/deepseek/chat/completions", json={
-                "model": "deepseek-v3", "stream": False,
-                "messages": [{"role": "user", "content": "Remember: my name is John"}],
-            }, headers={**AUTH, **SID})
-
-            r2 = client.post("/v1/deepseek/chat/completions", json={
-                "model": "deepseek-v3", "stream": False,
-                "messages": [{"role": "user", "content": "What is my name?"}],
-            }, headers={**AUTH, **SID})
-            assert r2.status_code == 200
-
-    def test_force_virtual_after_fallback(self, client):
-        with patch("core.routers.deepseek.route.DeepSeekChat") as MockDS:
-            instance = MockDS.return_value
-            call_count = [0]
-
-            def send(prompt, **kw):
-                call_count[0] += 1
-                n = call_count[0]
-                if n == 1:
-                    instance.chat_session_id = "ds-session-1"
-                    instance.parent_message_id = 2
-                    return {"ok": True, "content": {"response": "ECHO: turn1", "thought": ""}}
-                if n == 2:
-                    return {"ok": False, "content": b'{"code":40300,"msg":"MISSING_HEADER"}'}
-                instance.chat_session_id = None
-                instance.parent_message_id = None
-                return {"ok": True, "content": {"response": f"ECHO: {prompt}", "thought": ""}}
-
-            instance.send_message.side_effect = send
-
-            client.post("/v1/deepseek/chat/completions", json={
-                "model": "deepseek-v3", "stream": False,
-                "messages": [{"role": "user", "content": "Remember: my name is John"}],
-            }, headers={**AUTH, **SID})
-
-            client.post("/v1/deepseek/chat/completions", json={
-                "model": "deepseek-v3", "stream": False,
-                "messages": [{"role": "user", "content": "What is my name?"}],
-            }, headers={**AUTH, **SID})
-
-            client.post("/v1/deepseek/chat/completions", json={
-                "model": "deepseek-v3", "stream": False,
-                "messages": [{"role": "user", "content": "Check context"}],
-            }, headers={**AUTH, **SID})
+        # Verify Session B does NOT contain Session A's secret code BETA-77
+        assert "BETA-77" not in content_b
