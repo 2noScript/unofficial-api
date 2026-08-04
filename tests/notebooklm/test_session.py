@@ -1,7 +1,4 @@
-import os
 from unittest.mock import MagicMock, AsyncMock
-
-os.environ.setdefault("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID", "default-nb-id")
 
 AUTH = {"Authorization": "Bearer ua-test-test-test"}
 SID = {"X-Session-Id": "sess-nlm-1"}

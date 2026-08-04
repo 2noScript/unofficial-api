@@ -34,6 +34,7 @@ dev = [
 
 [tool.pyright]
 extraPaths = [
+    "deepseek-api",
     "DeepSeek-API/src",
     "Gemini-API/src",
     "metaai-api/src",
