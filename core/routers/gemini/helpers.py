@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from gemini_webapi import GeminiClient
-from gemini_webapi.constants import Model as GeminiModel
+from gemini_webapi.constants import Model as GeminiModel, AccountStatus
 
 
 def _get_client(request: Request) -> GeminiClient | None:
@@ -18,6 +18,11 @@ def _require_client(request: Request) -> GeminiClient | JSONResponse | None:
     if not client:
         return JSONResponse(
             {"error": "Gemini client not initialized. Check credentials."},
+            status_code=503,
+        )
+    if getattr(client, "account_status", None) == AccountStatus.UNAUTHENTICATED:
+        return JSONResponse(
+            {"error": "Gemini client is unauthenticated (cookies expired or invalid). Please check GEMINI_COOKIE."},
             status_code=503,
         )
     return client

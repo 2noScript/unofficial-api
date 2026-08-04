@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -100,6 +100,11 @@ async def lifespan(app: FastAPI):
             secure_1psid=secure_1psid, secure_1psidts=secure_1psidts,)
         try:
             await gemini_client.init(timeout=30, auto_close=False)
+            from gemini_webapi.constants import AccountStatus
+            if getattr(gemini_client, "account_status", None) == AccountStatus.UNAUTHENTICATED:
+                print("[Gemini] Init warning: Account status is UNAUTHENTICATED (cookies invalid or expired). Disabling gemini_client.", file=sys.stderr)
+                await gemini_client.close()
+                gemini_client = None
         except Exception as e:
             print(f"[Gemini] Init failed: {e}", file=sys.stderr)
             gemini_client = None
@@ -172,6 +177,22 @@ app = FastAPI(
     dependencies=[Depends(security_bearer)],
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.getLogger("core.server").error("Unhandled exception for %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "message": f"Internal server error: {str(exc)}",
+                "type": "api_error",
+                "code": "internal_error"
+            }
+        }
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

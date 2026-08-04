@@ -14,11 +14,15 @@ async def session_saving_generator(iterator, store):
     try:
         async for chunk in iterator:
             yield chunk
+    except Exception as e:
+        logger.error("Exception during streaming response: %s", e)
+        raise
     finally:
         try:
             store._save_to_disk()
         except Exception as e:
             logger.error("Failed to save session to disk in streaming middleware: %s", e)
+
 
 class VirtualSessionMiddleware:
     def __init__(self, store: VirtualSessionStore, manager: VirtualSessionManager, validate_key_fn, get_key_hash_fn, extract_provider_fn):
@@ -107,12 +111,30 @@ class VirtualSessionMiddleware:
             logger.error('Session resolution error: %s', e)
             vid = self.manager._derive_session_id(api_key_hash or fingerprint or 'error')
             
-        session_record = self.store.get_or_create(vid, api_key_hash=api_key_hash)
+        try:
+            session_record = self.store.get_or_create(vid, api_key_hash=api_key_hash)
+            request.state.virtual_session_id = vid
+            request.state.session_data = session_record.data
+        except Exception as e:
+            logger.error("Failed to retrieve or create session record: %s", e)
+            request.state.virtual_session_id = vid
+            request.state.session_data = {}
         
-        request.state.virtual_session_id = vid
-        request.state.session_data = session_record.data
-        
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as e:
+            logger.error("Unhandled exception processing request %s: %s", path, e, exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": {
+                        "message": f"Internal server error: {str(e)}",
+                        "type": "api_error",
+                        "code": "internal_error"
+                    }
+                }
+            )
+
         response.headers['X-Session-Id'] = vid
         
         # Automatically save session to disk on completion

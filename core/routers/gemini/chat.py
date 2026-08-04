@@ -110,7 +110,10 @@ async def chat_completions(
                 logger.warning("Gemini session error, resetting: %s", err_str)
                 adapter.clear_provider_session(session_data)
                 continue
-            return JSONResponse({"error": err_str}, status_code=500)
+            return JSONResponse(
+                {"error": {"message": err_str, "type": "server_error", "code": "upstream_error"}},
+                status_code=500,
+            )
 
         # Extract session data
         session_data.update(adapter.extract(chat, session_data))
@@ -144,7 +147,10 @@ async def chat_completions(
 
         return JSONResponse(response_data)
 
-    return JSONResponse({"error": "Failed after retry"}, status_code=500)
+    return JSONResponse(
+        {"error": {"message": "Gemini session failed after retry", "type": "server_error", "code": "upstream_error"}},
+        status_code=500,
+    )
 
 
 async def _stream_gemini(
