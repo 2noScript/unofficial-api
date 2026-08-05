@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(BASE, "..", "deepseek-api"))
-sys.path.insert(0, os.path.join(BASE, "..", "DeepSeek-API", "src"))
 sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API", "src"))
 sys.path.insert(0, os.path.join(BASE, "..", "metaai-api", "src"))
 sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))

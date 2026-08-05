@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.9.0",
     "curl-cffi>=0.15.0",
+    "deepseek-api",
     "fastapi[standard]>=0.138.0",
     "loguru>=0.7.3",
     "lxml-html-clean>=0.1.1",
@@ -19,10 +20,11 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-notebooklm-py = { path = "notebooklm-py" }
+deepseek-api = { path = "deepseek-api", editable = true }
+notebooklm-py = { path = "notebooklm-py", editable = true }
 
 # How SDKs are included:
-#   sys.path in server.py: DeepSeek (deepseek-api/), Gemini (Gemini-API/src/),
+#   sys.path in server.py: DeepSeek (deepseek-api/src/), Gemini (Gemini-API/src/),
 #                          Meta AI (metaai-api/src/), Grok (grok2api/)
 #   pip local path: NotebookLM (notebooklm-py)
 [dependency-groups]
@@ -34,8 +36,7 @@ dev = [
 
 [tool.pyright]
 extraPaths = [
-    "deepseek-api",
-    "DeepSeek-API/src",
+    "deepseek-api/src",
     "Gemini-API/src",
     "metaai-api/src",
     "grok2api",

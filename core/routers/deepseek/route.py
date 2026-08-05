@@ -9,12 +9,10 @@ from typing import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "deepseek-api"))
-
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 try:
-    from DeepSeekAPI import DeepSeekChat
+    from chat import DeepSeekChat
 except ImportError:
     DeepSeekChat = None
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
