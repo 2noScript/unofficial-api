@@ -479,6 +479,17 @@ wheels = [
 ]
 
 [[package]]
+name = "grok-api"
+version = "0.1.0"
+source = { editable = "grok-api" }
+dependencies = [
+    { name = "curl-cffi" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "curl-cffi", specifier = ">=0.7.0" }]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1388,6 +1399,7 @@ dependencies = [
     { name = "curl-cffi" },
     { name = "deepseek-api" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "grok-api" },
     { name = "loguru" },
     { name = "lxml-html-clean" },
     { name = "notebooklm-py" },
@@ -1411,6 +1423,7 @@ requires-dist = [
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "deepseek-api", editable = "deepseek-api" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.138.0" },
+    { name = "grok-api", editable = "grok-api" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "lxml-html-clean", specifier = ">=0.1.1" },
     { name = "notebooklm-py", editable = "notebooklm-py" },

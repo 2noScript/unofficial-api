@@ -4,9 +4,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY deepseek-api/ deepseek-api/
+COPY grok-api/ grok-api/
 COPY Gemini-API/ Gemini-API/
 COPY metaai-api/ metaai-api/
-COPY grok2api/ grok2api/
 COPY notebooklm-py/ notebooklm-py/
 RUN uv sync --frozen --no-dev
 
@@ -15,9 +15,9 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY core/ core/
 COPY deepseek-api/ deepseek-api/
+COPY grok-api/ grok-api/
 COPY Gemini-API/ Gemini-API/
 COPY metaai-api/ metaai-api/
-COPY grok2api/ grok2api/
 COPY notebooklm-py/ notebooklm-py/
 
 # Persistent data directory for API keys and machine_id

@@ -1,29 +1,46 @@
-from unittest.mock import AsyncMock
+import os
+import pytest
 
-AUTH = {"Authorization": "Bearer ua-test-test-test"}
-SID = {"X-Session-Id": "sess-grok-1"}
+AUTH = {"Authorization": "Bearer dev-key"}
+SID = {"X-Session-Id": "sess-grok-live-multiturn"}
 
 
 class TestGrokSession:
+    @pytest.mark.skipif(
+        not os.environ.get("GROK_COOKIE"),
+        reason="Live Grok credentials missing in .env",
+    )
     def test_multiturn(self, client):
-        mock_client = client.app.state.grok_client
+        """Test real multi-turn conversation with Grok over WebSocket Gateway."""
+        print("\n--- [LIVE GROK TEST] Multi-turn Conversation ---")
 
-        async def send_side(prompt, mode_id=None):
-            return f"ECHO: {prompt}"
+        # Turn 1: Provide information
+        r1 = client.post(
+            "/v1/grok/chat/completions",
+            json={
+                "model": "grok-3",
+                "stream": False,
+                "messages": [{"role": "user", "content": "Remember: my favorite color is neon blue."}],
+            },
+            headers={**AUTH, **SID},
+        )
+        assert r1.status_code == 200, f"HTTP {r1.status_code}: {r1.text}"
+        ans1 = r1.json()["choices"][0]["message"]["content"]
+        print("Turn 1 Answer:", repr(ans1))
+        assert ans1 != ""
 
-        mock_client.send_message = AsyncMock(side_effect=send_side)
+        # Turn 2: Query information from memory using same X-Session-Id
+        r2 = client.post(
+            "/v1/grok/chat/completions",
+            json={
+                "model": "grok-3",
+                "stream": False,
+                "messages": [{"role": "user", "content": "What is my favorite color?"}],
+            },
+            headers={**AUTH, **SID},
+        )
+        assert r2.status_code == 200, f"HTTP {r2.status_code}: {r2.text}"
+        ans2 = r2.json()["choices"][0]["message"]["content"].lower()
+        print("Turn 2 Answer:", repr(ans2))
+        assert "blue" in ans2 or "neon" in ans2
 
-        r1 = client.post("/v1/grok/chat/completions", json={
-            "model": "grok-4.20-auto", "stream": False,
-            "messages": [{"role": "user", "content": "Remember: my name is John"}],
-        }, headers={**AUTH, **SID})
-        assert r1.status_code == 200, r1.text
-
-        r2 = client.post("/v1/grok/chat/completions", json={
-            "model": "grok-4.20-auto", "stream": False,
-            "messages": [{"role": "user", "content": "What is my name?"}],
-        }, headers={**AUTH, **SID})
-        assert r2.status_code == 200, r2.text
-
-        content = r2.json()["choices"][0]["message"]["content"].lower()
-        assert "john" in content

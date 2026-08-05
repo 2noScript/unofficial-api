@@ -53,9 +53,7 @@ def test_chat_non_stream():
         },
         headers={**AUTH, **SID},
     )
-    if resp.status_code == 503:
-        pytest.skip("Grok client unauthenticated or cookie expired")
-    assert resp.status_code == 200
+    assert resp.status_code == 200, f"HTTP {resp.status_code}: {resp.text}"
     data = resp.json()
     print("Live Grok Non-Stream Response:\n", json.dumps(data, indent=2, ensure_ascii=False))
     assert data["object"] == "chat.completion"
@@ -80,9 +78,7 @@ def test_chat_stream():
         },
         headers={**AUTH, **SID},
     )
-    if resp.status_code == 503:
-        pytest.skip("Grok client unauthenticated or cookie expired")
-    assert resp.status_code == 200
+    assert resp.status_code == 200, f"HTTP {resp.status_code}: {resp.text}"
     assert resp.text.startswith("data: ")
     assert "data: [DONE]" in resp.text
 

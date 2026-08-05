@@ -9,8 +9,6 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(BASE, "grok2api"))
-sys.path.insert(0, os.path.join(BASE, "deepseek-api"))
 sys.path.insert(0, os.path.join(BASE, "Gemini-API/src"))
 sys.path.insert(0, os.path.join(BASE, "metaai-api", "src"))
 

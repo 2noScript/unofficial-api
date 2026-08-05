@@ -8,7 +8,6 @@ load_dotenv()
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API", "src"))
 sys.path.insert(0, os.path.join(BASE, "..", "metaai-api", "src"))
-sys.path.insert(0, os.path.join(BASE, "..", "grok2api"))
 
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -33,10 +32,7 @@ try:
 except ImportError:
     MetaAI = None
 
-try:
-    from core.routers.grok.client import GrokClient
-except ImportError:
-    GrokClient = None
+
 
 try:
     from core.routers.deepseek import router as deepseek_router
@@ -142,22 +138,6 @@ async def lifespan(app: FastAPI):
                 metaai_client = None
 
     app.state.metaai_client = metaai_client
-
-    # Grok
-    grok_client = None
-    grok_cookies_str = os.environ.get("GROK_COOKIE")
-    if GrokClient and grok_cookies_str:
-        try:
-            grok_client = GrokClient(
-                cookies_str=grok_cookies_str,
-                user_agent=os.environ.get("GROK_PROXY_USER_AGENT", ""),
-                browser=os.environ.get("GROK_PROXY_BROWSER", ""),
-            )
-        except Exception as e:
-            print(f"[Grok] Init failed: {e}", file=sys.stderr)
-            grok_client = None
-
-    app.state.grok_client = grok_client
     yield
 
     if gemini_client:
