@@ -15,6 +15,7 @@ log_files
 
 .DS_Store
 # Vendor git repos (standalone, not submodules)
+deepseek-api/
 Gemini-API/
 notebooklm-py/
 metaai-api/
