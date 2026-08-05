@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import time
 import asyncio
@@ -7,78 +6,31 @@ import logging
 import functools
 from typing import AsyncGenerator
 
-logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-try:
-    from chat import DeepSeekChat
-except ImportError:
-    DeepSeekChat = None
+from deepseek_api import DeepSeek, DEEPSEEK_MODELS, DEEPSEEK_MODEL_CONFIG
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
-from core.utils import extract_text, parse_cookie
+from core.utils import extract_text
 from core.session.adapters import get_adapter
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["DeepSeek"])
 
-DEEPSEEK_MODEL_CONFIG = {
-    "deepseek-v3": {"model_type": "default", "thinking": False},
-    "deepseek-r1": {"model_type": "default", "thinking": False},
-    "deepseek-v4": {"model_type": "default", "thinking": False},
-    "deepseek-r4": {"model_type": "default", "thinking": False},
-}
 
-DEEPSEEK_MODELS = [
-    {
-        "id": "deepseek-v3",
-        "object": "model",
-        "created": 1704067200,
-        "owned_by": "deepseek",
-        "description": "Default model without extended thinking",
-    },
-    {
-        "id": "deepseek-r1",
-        "object": "model",
-        "created": 1704067200,
-        "owned_by": "deepseek",
-        "description": "Default model with extended thinking",
-    },
-    {
-        "id": "deepseek-v4",
-        "object": "model",
-        "created": 1704067200,
-        "owned_by": "deepseek",
-        "description": "Default model without extended thinking",
-    },
-    {
-        "id": "deepseek-r4",
-        "object": "model",
-        "created": 1704067200,
-        "owned_by": "deepseek",
-        "description": "Default model with extended thinking",
-    },
-]
-
-
-def _get_auth():
-    deepseek_cookie = os.environ.get("DEEPSEEK_COOKIE") or ""
-    ds_session_id = parse_cookie(deepseek_cookie, "ds_session_id")
+def _get_auth() -> str:
     auth_token = os.environ.get("DEEPSEEK_AUTH_TOKEN")
-    if not ds_session_id or not auth_token:
+    if not auth_token:
         raise ValueError(
-            "DeepSeek credentials not found. Set DEEPSEEK_COOKIE and DEEPSEEK_AUTH_TOKEN"
+            "DeepSeek credentials not found. Set DEEPSEEK_AUTH_TOKEN"
         )
     if not auth_token.startswith("Bearer "):
         auth_token = f"Bearer {auth_token}"
-    return ds_session_id, auth_token
-
-
-def _get_model_config(model: str):
-    key = model.lower()
-    config = DEEPSEEK_MODEL_CONFIG.get(key, DEEPSEEK_MODEL_CONFIG["deepseek-v3"])
-    return config["model_type"], config["thinking"], key
+    return auth_token
 
 
 def _parse_deepseek_error(err: str) -> tuple[int, str]:
@@ -90,39 +42,16 @@ def _parse_deepseek_error(err: str) -> tuple[int, str]:
 
 
 def _is_session_error(err: str) -> bool:
-    """Detect provider-side chat session errors that require a new session."""
-    if not err:
-        return False
-    low = err.lower()
-    return any(k in low for k in [
-        "chat session not found",
-        "session_not_found",
-        "missing_header",
-        "invalid session",
-        "chat not found",
-    ])
-
-
-def _is_retryable_40300_error(err: str) -> bool:
-    """Detect 40300 / rate limit errors from DeepSeek that should be automatically retried."""
-    if not err:
-        return False
-    low = err.lower()
-    return any(k in low for k in [
-        "40300",
-        "rate_limit_reached",
-        "消息发送过于频繁",
-        "too many requests",
-        "rate limit",
-    ])
+    session_keywords = (
+        "session", "401", "403", "unauthorized", "login",
+        "token", "expired", "invalid", "auth", "40300"
+    )
+    lower = err.lower()
+    return any(kw in lower for kw in session_keywords)
 
 
 def _build_prompt(history: list[dict], user_message: str, has_provider_session: bool) -> str:
-    """Return the prompt to send to DeepSeek.
-
-    If we have an active provider session, send only the current user message.
-    Otherwise, embed the full history as a transcript in the prompt.
-    """
+    """If provider session exists, only send user message. Otherwise format full transcript."""
     if has_provider_session:
         return user_message
     return format_prompt_with_history(history, user_message)
@@ -130,226 +59,122 @@ def _build_prompt(history: list[dict], user_message: str, has_provider_session: 
 
 def _run_chat(
     messages: list,
-    model_type: str,
-    thinking_enabled: bool,
-    search_enabled: bool,
+    model: str,
     session_data: dict,
     adapter,
 ) -> dict:
-    ds_session_id, auth_token = _get_auth()
+    auth_token = _get_auth()
     user_message = extract_text(messages[-1].content) if messages else ""
     history = session_data.get("history", [])
 
-    last_error: str = "Unknown error"
-    last_status: int = 500
+    has_provider_session = bool(session_data.get("deepseek_chat_session_id")) and not session_data.get("deepseek_force_virtual")
+    prompt = _build_prompt(history, user_message, has_provider_session)
+    session_kwargs = adapter.inject(session_data, {})
 
-    for attempt in range(4):  # up to 4 attempts: 1 initial attempt + 3 automatic retries
-        has_provider_session = bool(session_data.get("deepseek_chat_session_id")) and not session_data.get("deepseek_force_virtual")
-        prompt = _build_prompt(history, user_message, has_provider_session)
-        chat = DeepSeekChat(ds_session_id, auth_token)
-        adapter.inject(session_data, {"chat": chat})
+    client = DeepSeek(auth_token)
+    chat = client.new_session(**session_kwargs)
 
-        try:
-            result = chat.send_message(
-                prompt,
-                thinking_enabled=thinking_enabled,
-                search_enabled=search_enabled,
-                model_type=model_type,
-            )
-        except Exception as e:
-            err_str = str(e)
-            last_status, last_error = _parse_deepseek_error(err_str)
-            if attempt < 3:
-                logger.warning("DeepSeek error on attempt %d/4 (retry %d/3), retrying in 1.5s: %s", attempt + 1, attempt + 1, err_str)
-                time.sleep(1.5)
-                continue
-            raise
+    result = chat.send_message(prompt, model=model)
 
-        if not isinstance(result, dict):
-            last_error = f"Unexpected response type from DeepSeek: {result}"
-            if attempt < 3:
-                time.sleep(1.5)
-                continue
-            break
+    if not result.get("ok"):
+        err_msg = result.get("content", "Unknown error")
+        if isinstance(err_msg, (bytes, bytearray)):
+            err_msg = err_msg.decode("utf-8", errors="replace")
+        last_status, last_error = _parse_deepseek_error(err_msg)
+        if last_status in (401, 403):
+            raise ValueError(last_error)
+        raise RuntimeError(last_error)
 
-        if not result.get("ok"):
-            err = result.get("content", "Unknown error")
-            if isinstance(err, (bytes, bytearray)):
-                err = err.decode("utf-8", errors="replace")
-            last_status, last_error = _parse_deepseek_error(err)
+    if not session_data.get("deepseek_force_virtual"):
+        session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
 
-            # If provider session is broken, reset and retry with history transcript
-            if _is_session_error(err) and has_provider_session:
-                logger.warning("DeepSeek session error, resetting provider session: %s", err)
-                adapter.clear_provider_session(session_data)
-                session_data["deepseek_force_virtual"] = True
-
-            if attempt < 3:
-                logger.warning("DeepSeek error on attempt %d/4 (retry %d/3), retrying in 1.5s: %s", attempt + 1, attempt + 1, err)
-                time.sleep(1.5)
-                continue
-
-            continue
-
-        # Success — persist session state (skip provider IDs in virtual-only mode)
-        if not session_data.get("deepseek_force_virtual"):
-            session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
-
-        content = result.get("content", {})
-        if isinstance(content, dict):
-            response_text = content.get("response", "")
-            append_assistant_message(session_data, response_text)
-            return content
-        text = str(content)
-        append_assistant_message(session_data, text)
-        return {"response": text}
-
-    if last_status in (401, 403):
-        raise ValueError(last_error)
-    raise RuntimeError(last_error)
-
-
-async def _stream_chat_fake(
-    messages: list,
-    model: str,
-    model_type: str,
-    thinking_enabled: bool,
-    search_enabled: bool,
-    session_data: dict,
-    adapter,
-) -> AsyncGenerator[str, None]:
-    response_id = f"chatcmpl-{int(time.time())}"
-    try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None, functools.partial(_run_chat, messages, model_type, thinking_enabled, search_enabled, session_data, adapter)
-        )
-        text = result.get("response", "")
-        first = True
-        for line in text.split("\n"):
-            yield make_stream_chunk(model, line + "\n", response_id, is_first=first)
-            first = False
-        if not first:
-            yield make_stream_chunk(model, "", response_id, is_final=True)
-        yield STREAM_END
-    except ValueError as e:
-        yield make_error_chunk(str(e), "authentication_error", "invalid_credentials")
-        yield STREAM_END
-    except Exception as e:
-        yield make_error_chunk(str(e), "server_error", "upstream_error")
-        yield STREAM_END
+    content = result.get("content", {})
+    if isinstance(content, dict):
+        response_text = content.get("response", "")
+        append_assistant_message(session_data, response_text)
+        return content
+    text = str(content)
+    append_assistant_message(session_data, text)
+    return {"response": text}
 
 
 async def _stream_chat_real(
     messages: list,
     model: str,
-    model_type: str,
-    thinking_enabled: bool,
-    search_enabled: bool,
     session_data: dict,
     adapter,
 ) -> AsyncGenerator[str, None]:
     try:
-        ds_session_id, auth_token = _get_auth()
+        auth_token = _get_auth()
         user_message = extract_text(messages[-1].content) if messages else ""
         history = session_data.get("history", [])
         response_id = f"chatcmpl-{int(time.time())}"
 
-        # Up to 4 iterations (3 automatic retries for session/network/40300 errors)
-        for attempt in range(4):
-            has_provider_session = bool(session_data.get("deepseek_chat_session_id")) and not session_data.get("deepseek_force_virtual")
-            prompt = _build_prompt(history, user_message, has_provider_session)
+        has_provider_session = bool(session_data.get("deepseek_chat_session_id")) and not session_data.get("deepseek_force_virtual")
+        prompt = _build_prompt(history, user_message, has_provider_session)
 
-            queue: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
-            sentinel = object()
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
 
-            def on_text(chunk: str):
-                loop.call_soon_threadsafe(queue.put_nowait, chunk)
+        def run() -> dict:
+            try:
+                session_kwargs = adapter.inject(session_data, {})
+                client = DeepSeek(auth_token)
+                chat = client.new_session(**session_kwargs)
 
-            def _send() -> dict:
-                try:
-                    chat = DeepSeekChat(ds_session_id, auth_token)
-                    adapter.inject(session_data, {"chat": chat})
+                for event_type, content in chat.send_message_stream(
+                    prompt,
+                    model=model,
+                ):
+                    if event_type == "error":
+                        return {"ok": False, "content": content}
+                    elif event_type in ("content", "thought"):
+                        loop.call_soon_threadsafe(queue.put_nowait, content)
 
-                    result = chat.send_message(
-                        prompt,
-                        thinking_enabled=thinking_enabled,
-                        search_enabled=search_enabled,
-                        model_type=model_type,
-                        text_callback=on_text,
-                    )
-                    if result.get("ok"):
-                        session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
-                        return result
-                    err = result.get("content", "Unknown error")
-                    if isinstance(err, (bytes, bytearray)):
-                        err = err.decode("utf-8", errors="replace")
-                    logger.warning("DeepSeek stream send attempt %d/4 failed: %s", attempt + 1, err)
-                    return {"ok": False, "content": err}
-                except Exception as e:
-                    logger.warning("DeepSeek stream send attempt %d/4 threw: %s", attempt + 1, e)
-                    return {"ok": False, "content": str(e)}
+                session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
+                return {"ok": True}
+            except Exception as e:
+                return {"ok": False, "content": str(e)}
 
-            def run() -> dict:
-                try:
-                    return _send()
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, sentinel)
+        t = loop.run_in_executor(None, run)
 
-            task = loop.run_in_executor(None, run)
+        collected_text = []
+        first = True
+        while True:
+            get_task = asyncio.create_task(queue.get())
+            done, _ = await asyncio.wait([get_task, t], return_when=asyncio.FIRST_COMPLETED)
 
-            # Collect streamed text while the thread is running
-            collected_text = []
-            first = True
-            while True:
-                chunk = await queue.get()
-                if chunk is sentinel:
-                    break
-                collected_text.append(chunk)
-                yield make_stream_chunk(model, chunk, response_id, is_first=first)
+            if get_task in done:
+                chunk_text = get_task.result()
+                collected_text.append(chunk_text)
+                chunk_str = make_stream_chunk(model, chunk_text, response_id, is_first=first)
+                yield chunk_str
                 first = False
+            else:
+                get_task.cancel()
+                res = t.result()
+                if not res.get("ok"):
+                    err_msg = res.get("content", "Stream error")
+                    yield make_error_chunk(err_msg)
+                    yield STREAM_END
+                    return
+                else:
+                    full_response = "".join(collected_text)
+                    append_assistant_message(session_data, full_response)
+                    yield make_stream_chunk(model, "", response_id, is_final=True)
+                    yield STREAM_END
+                    return
 
-            result = await task
-
-            if not result.get("ok"):
-                err = result.get("content", "Unknown error")
-                if isinstance(err, (bytes, bytearray)):
-                    err = err.decode("utf-8", errors="replace")
-
-                # If no chunks have been sent to the client yet, we can safely retry
-                if first and attempt < 3:
-                    if _is_session_error(err) and bool(session_data.get("deepseek_chat_session_id")):
-                        logger.warning("DeepSeek stream session error, resetting provider session: %s", err)
-                        adapter.clear_provider_session(session_data)
-                        session_data["deepseek_force_virtual"] = True
-                    else:
-                        logger.warning("DeepSeek stream error on attempt %d/4 (retry %d/3), retrying in 1.5s: %s", attempt + 1, attempt + 1, err)
-                    await asyncio.sleep(1.5)
-                    continue
-
-                yield make_error_chunk(str(err))
-                yield STREAM_END
-                return
-
-            # Append assistant text to history on success
-            full_response = "".join(collected_text)
-            append_assistant_message(session_data, full_response)
-
-            if not first:
-                yield make_stream_chunk(model, "", response_id, is_final=True)
-            yield STREAM_END
-            return
-
-    except ValueError as e:
-        yield make_error_chunk(str(e), "authentication_error", "invalid_credentials")
-        yield STREAM_END
     except Exception as e:
-        yield make_error_chunk(str(e), "server_error", "upstream_error")
+        logger.error("DeepSeek streaming failed: %s", e)
+        yield make_error_chunk(str(e))
         yield STREAM_END
 
 
-@router.get("/models", summary="List available DeepSeek models")
+@router.get(
+    "/models",
+    summary="List available DeepSeek models",
+)
 async def list_models():
     return {"object": "list", "data": DEEPSEEK_MODELS}
 
@@ -385,7 +210,6 @@ async def chat_completions(
             status_code=400,
         )
 
-    model_type, thinking_enabled, _ = _get_model_config(model)
     logger.info("Request /v1/deepseek/chat/completions: %s", body.model_dump_json())
 
     # Session integration
@@ -399,14 +223,14 @@ async def chat_completions(
     try:
         if stream:
             return StreamingResponse(
-                _stream_chat_real(messages, model, model_type, thinking_enabled, False, session_data, adapter),
+                _stream_chat_real(messages, model, session_data, adapter),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            None, functools.partial(_run_chat, messages, model_type, thinking_enabled, False, session_data, adapter)
+            None, functools.partial(_run_chat, messages, model, session_data, adapter)
         )
     except ValueError as e:
         return JSONResponse(

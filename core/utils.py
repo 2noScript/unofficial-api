@@ -29,10 +29,7 @@ def extract_text(content: str | list | None) -> str:
 def validate_env():
     errors = []
 
-    if os.environ.get("DEEPSEEK_COOKIE") or os.environ.get("DEEPSEEK_AUTH_TOKEN"):
-        dc = os.environ.get("DEEPSEEK_COOKIE") or ""
-        if not parse_cookie(dc, "ds_session_id"):
-            errors.append("DeepSeek: missing ds_session_id. Set DEEPSEEK_COOKIE=\"ds_session_id=...\"")
+    if os.environ.get("DEEPSEEK_AUTH_TOKEN"):
         if not os.environ.get("DEEPSEEK_AUTH_TOKEN"):
             errors.append("DeepSeek: missing auth token. Set DEEPSEEK_AUTH_TOKEN")
 

@@ -10,19 +10,25 @@ class DeepSeekAdapter(BaseSessionAdapter):
         return 'deepseek'
 
     def inject(self, data: dict, request_args: dict) -> dict:
-        """Inject stored DeepSeek session state into the chat instance."""
-        chat = request_args.get('chat')
-        if chat is None:
-            return {}
+        """Inject stored DeepSeek session state into ChatSession kwargs."""
+        kwargs = {}
         sid = data.get('deepseek_chat_session_id')
         if sid:
-            chat.chat_session_id = sid
+            kwargs['chat_session_id'] = sid
             logger.debug('Injected deepseek chat_session_id: %s', str(sid)[:20])
         pid = data.get('deepseek_parent_message_id')
         if pid:
-            chat.parent_message_id = pid
+            kwargs['parent_message_id'] = pid
             logger.debug('Injected deepseek parent_message_id: %s', str(pid)[:20])
-        return {}
+
+        chat = request_args.get('chat')
+        if chat is not None:
+            if sid:
+                chat.chat_session_id = sid
+            if pid:
+                chat.parent_message_id = pid
+
+        return kwargs
 
     def extract(self, response: dict, data: dict) -> dict:
         """Extract and persist DeepSeek session state after a response."""
@@ -30,12 +36,17 @@ class DeepSeekAdapter(BaseSessionAdapter):
         chat = response.get('_chat_instance')
         if not chat:
             return new_data
-        if getattr(chat, 'chat_session_id', None):
-            new_data['deepseek_chat_session_id'] = chat.chat_session_id
-            logger.debug('Extracted deepseek chat_session_id: %s', chat.chat_session_id[:20])
-        if getattr(chat, 'parent_message_id', None):
-            new_data['deepseek_parent_message_id'] = chat.parent_message_id
-            logger.debug('Extracted deepseek parent_message_id: %s', str(chat.parent_message_id)[:20])
+
+        state = getattr(chat, 'get_state', lambda: {})()
+        chat_session_id = state.get('chat_session_id') or getattr(chat, 'chat_session_id', None)
+        parent_message_id = state.get('parent_message_id') or getattr(chat, 'parent_message_id', None)
+
+        if chat_session_id:
+            new_data['deepseek_chat_session_id'] = chat_session_id
+            logger.debug('Extracted deepseek chat_session_id: %s', str(chat_session_id)[:20])
+        if parent_message_id:
+            new_data['deepseek_parent_message_id'] = parent_message_id
+            logger.debug('Extracted deepseek parent_message_id: %s', str(parent_message_id)[:20])
         return new_data
 
     def clear_provider_session(self, data: dict) -> None:

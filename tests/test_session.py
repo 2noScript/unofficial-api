@@ -10,7 +10,7 @@ AUTH = {"Authorization": "Bearer dev-key"}
 
 
 @pytest.mark.skipif(
-    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
     reason="Live DeepSeek credentials missing in .env",
 )
 class TestCrossSession:
@@ -70,7 +70,7 @@ class TestCrossSession:
 
 
 @pytest.mark.skipif(
-    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
     reason="Live DeepSeek credentials missing in .env",
 )
 class TestNoSessionHeader:

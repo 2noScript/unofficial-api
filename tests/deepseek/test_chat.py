@@ -37,7 +37,7 @@ def test_invalid_model():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
     reason="Live DeepSeek credentials missing in .env",
 )
 def test_chat_non_stream():
@@ -62,7 +62,7 @@ def test_chat_non_stream():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
     reason="Live DeepSeek credentials missing in .env",
 )
 def test_chat_thinking_model():
@@ -85,7 +85,7 @@ def test_chat_thinking_model():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("DEEPSEEK_COOKIE") or not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
+    not os.environ.get("DEEPSEEK_AUTH_TOKEN"),
     reason="Live DeepSeek credentials missing in .env",
 )
 def test_chat_stream():
