@@ -56,7 +56,6 @@ cp .env.example .env
 
 | Env var | Required | Description |
 |---|---|---|
-| `DEEPSEEK_COOKIE` | ✅ | DeepSeek full cookie string — [docs](docs/deepseek.md) |
 | `DEEPSEEK_AUTH_TOKEN` | ✅ | DeepSeek `authorization` header — [docs](docs/deepseek.md) |
 | `GEMINI_COOKIE` | ✅ | Gemini full cookie string — [docs](docs/gemini.md) |
 | `NOTEBOOKLM_STORAGE_PATH` | ❌* | Path to `storage_state.json` — [docs](docs/notebooklm.md) |

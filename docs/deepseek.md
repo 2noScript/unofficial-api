@@ -8,7 +8,6 @@
 
 | Source | Env var | Required | How to get |
 |---|---|---|---|
-| Full `Cookie` header | `DEEPSEEK_COOKIE` | ✅ | DevTools → Network → Request Headers → copy the entire `Cookie: ...` line |
 | `authorization` header | `DEEPSEEK_AUTH_TOKEN` | ✅ | DevTools → Network → Request Headers → copy the `authorization: ...` value |
 
 > The `authorization` value looks like `Bearer eyJhbGciOiJIUzI1NiIs...`. Copy the **entire value**. The server auto-prepends `Bearer ` if missing from `DEEPSEEK_AUTH_TOKEN`.
