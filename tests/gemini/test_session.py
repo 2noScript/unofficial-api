@@ -4,6 +4,8 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from core.routers.gemini import router as gm_router
+
 AUTH = {"Authorization": "Bearer ua-test-key"}
 SID = {"x-session-id": "sess-gemini-1"}
 SESSION_STORE = {}
@@ -26,7 +28,6 @@ def gemini_session_app():
             request.state.virtual_session_id = sid
         return await call_next(request)
 
-    from core.routers.gemini import router as gm_router
     app.include_router(gm_router, prefix="/v1/gemini")
 
     app.state.gemini_client = MagicMock()

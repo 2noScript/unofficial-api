@@ -125,7 +125,7 @@ class ChatExecutionService:
                 )
 
             # Extract updated session state
-            if provider_name == "gemini" and "chat" in session_kwargs:
+            if "chat" in session_kwargs:
                 session_data.update(adapter.extract(session_kwargs["chat"], session_data))
 
             append_assistant_message(session_data, content)
@@ -203,7 +203,7 @@ class ChatExecutionService:
                         first = False
 
                 # Extract updated session state
-                if provider_name == "gemini" and "chat" in session_kwargs:
+                if "chat" in session_kwargs:
                     session_data.update(adapter.extract(session_kwargs["chat"], session_data))
 
                 full_response = "".join(collected_chunks)

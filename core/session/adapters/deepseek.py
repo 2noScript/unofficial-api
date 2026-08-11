@@ -30,16 +30,24 @@ class DeepSeekAdapter(BaseSessionAdapter):
 
         return kwargs
 
-    def extract(self, response: dict, data: dict) -> dict:
+    def extract(self, response, data: dict) -> dict:
         """Extract and persist DeepSeek session state after a response."""
         new_data = dict(data)
-        chat = response.get('_chat_instance')
+        if isinstance(response, dict):
+            chat = response.get('_chat_instance')
+        else:
+            chat = response
+
         if not chat:
             return new_data
 
         state = getattr(chat, 'get_state', lambda: {})()
-        chat_session_id = state.get('chat_session_id') or getattr(chat, 'chat_session_id', None)
-        parent_message_id = state.get('parent_message_id') or getattr(chat, 'parent_message_id', None)
+        if isinstance(state, dict):
+            chat_session_id = state.get('chat_session_id') or getattr(chat, 'chat_session_id', None)
+            parent_message_id = state.get('parent_message_id') or getattr(chat, 'parent_message_id', None)
+        else:
+            chat_session_id = getattr(chat, 'chat_session_id', None)
+            parent_message_id = getattr(chat, 'parent_message_id', None)
 
         if chat_session_id:
             new_data['deepseek_chat_session_id'] = chat_session_id

@@ -24,6 +24,7 @@ class DeepSeekStrategy(BaseProviderStrategy):
         self, client: Any, prompt: str, model: str, session_kwargs: dict
     ) -> tuple[str, str]:
         chat = client.new_session(**session_kwargs)
+        session_kwargs["chat"] = chat
         result = chat.send_message(prompt, model=model)
 
         if not result.get("ok"):
@@ -41,6 +42,7 @@ class DeepSeekStrategy(BaseProviderStrategy):
         self, client: Any, prompt: str, model: str, session_kwargs: dict
     ) -> AsyncGenerator[str, None]:
         chat = client.new_session(**session_kwargs)
+        session_kwargs["chat"] = chat
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
 
