@@ -36,5 +36,9 @@ extraPaths = [
     "Gemini-API/src",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+
 
 

@@ -28,14 +28,14 @@ class GeminiAdapter(BaseSessionAdapter):
     def extract(self, response, data: dict) -> dict:
         new_data = dict(data)
         cid = getattr(response, 'cid', None)
-        if cid:
+        if cid and isinstance(cid, str):
             new_data['gemini_cid'] = cid
             logger.debug('Extracted gemini cid: %s', str(cid)[:20])
         metadata = getattr(response, 'metadata', None)
-        if metadata:
+        if metadata and isinstance(metadata, (dict, list)):
             new_data['gemini_metadata'] = metadata
         state = getattr(response, 'session_state', None)
-        if state:
+        if state and isinstance(state, (dict, list)):
             new_data['gemini_session_state'] = state
         return new_data
 

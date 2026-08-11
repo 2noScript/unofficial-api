@@ -74,6 +74,12 @@ async def _resolve_gemini_client(request: Request, session_data: dict) -> tuple[
     )
 
 
+from core.services.chat_service import chat_service
+from core.services.gemini_strategy import GeminiStrategy
+
+gemini_strategy = GeminiStrategy()
+
+
 @router.post(
     "/chat/completions",
     summary="Create a chat completion using Gemini models",
@@ -96,10 +102,6 @@ async def chat_completions(
     ),
 ):
     session_data = getattr(request.state, "session_data", {})
-    client, profile_id, err_response = await _resolve_gemini_client(request, session_data)
-    if err_response or not client:
-        return err_response or JSONResponse({"error": {"message": "Gemini client not available", "type": "server_error", "code": "upstream_error"}}, status_code=503)
-
     VALID_GEMINI_MODELS = {m.model_name for m in GeminiModel if m is not GeminiModel.UNSPECIFIED}
 
     messages = [m.model_dump() for m in body.messages]
@@ -116,85 +118,27 @@ async def chat_completions(
     raw_prompt = extract_text(messages[-1].get("content")) if messages else ""
     logger.info("Request /v1/gemini/chat/completions: %s", body.model_dump_json())
 
-    # Session integration
     adapter = get_adapter("gemini")
-
-    # Sync local history with incoming messages
     sync_and_get_history(messages, session_data)
     history = session_data.get("history", [])
 
     if stream:
+        client, profile_id, err_response = await chat_service.resolve_client(gemini_strategy, request, session_data)
+        if err_response or not client:
+            return err_response or JSONResponse({"error": {"message": "Gemini client not available", "type": "server_error", "code": "upstream_error"}}, status_code=503)
         return StreamingResponse(
             _stream_gemini(client, raw_prompt, resolved_model, session_data, adapter, history, profile_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
-    # Non-streaming with retry-on-session-error and auth failover
-    for attempt in range(2):
-        has_session = _has_provider_session(session_data) and attempt == 0
-        prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)
-        chat = _build_chat_session(client, session_data)
-
-        try:
-            output = await client.generate_content(
-                prompt=prompt, model=resolved_model, chat=chat
-            )
-        except Exception as e:
-            err_str = str(e)
-            if load_balancer.is_retryable_error(err_str) or "unauthenticated" in err_str.lower():
-                logger.warning("Gemini profile '%s' request failed with auth error (%s). Deactivating profile...", profile_id, err_str)
-                if profile_id:
-                    load_balancer.handle_profile_failure(profile_id, session_data)
-                    if profile_id in gemini_pool._clients:
-                        del gemini_pool._clients[profile_id]
-
-            if attempt == 0 and _has_provider_session(session_data):
-                logger.warning("Gemini session error, resetting session and retrying: %s", err_str)
-                adapter.clear_provider_session(session_data)
-                continue
-
-            logger.error("Gemini chat error: %s", err_str)
-            return JSONResponse(
-                {"error": {"message": err_str, "type": "server_error", "code": "upstream_error"}},
-                status_code=500,
-            )
-
-        # Extract session data
-        session_data.update(adapter.extract(chat, session_data))
-
-        content = output.text or ""
-        thoughts = output.thoughts or ""
-
-        append_assistant_message(session_data, content)
-
-        response_data = {
-            "id": f"chatcmpl-{int(time.time())}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": resolved_model,
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": content},
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": len(content.split()) if content else 0,
-                "total_tokens": len(content.split()) if content else 0,
-            },
-        }
-
-        if thoughts:
-            response_data["choices"][0]["message"]["reasoning_content"] = thoughts
-
-        return JSONResponse(response_data)
-
-    return JSONResponse(
-        {"error": {"message": "Gemini session failed after retry", "type": "server_error", "code": "upstream_error"}},
-        status_code=500,
+    return await chat_service.execute_chat(
+        strategy=gemini_strategy,
+        request=request,
+        messages=messages,
+        model=resolved_model,
+        session_data=session_data,
+        adapter=adapter,
     )
 
 
