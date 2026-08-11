@@ -1,5 +1,7 @@
 # DeepSeek
 
+> 📁 **GitHub Repository**: [2noScript/deepseek-api](https://github.com/2noScript/deepseek-api)
+
 ## Credentials
 
 1. Go to https://chat.deepseek.com and sign in

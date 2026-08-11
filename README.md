@@ -40,10 +40,10 @@ OpenAI-compatible REST API for **DeepSeek** and **Gemini** with multi-profile dy
    ```
    Save the returned `api_key` — pass it as `Authorization: Bearer <key>` on every request.
 
-| Provider | Credentials Guide | Specific Endpoints |
-|---|---|---|
-| DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | [reasoning_content](docs/deepseek.md#response--additional-fields) |
-| Gemini | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
+| Provider | GitHub Repository | Credentials Guide | Specific Endpoints |
+|---|---|---|---|
+| DeepSeek | [2noScript/deepseek-api](https://github.com/2noScript/deepseek-api) | [`docs/deepseek.md`](docs/deepseek.md) | [reasoning_content](docs/deepseek.md#response--additional-fields) |
+| Gemini | [HanaokaYuzu/Gemini-API](https://github.com/HanaokaYuzu/Gemini-API) | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
 
 ## Profiles & Load Balancing
 

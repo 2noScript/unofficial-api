@@ -1,5 +1,7 @@
 # Gemini
 
+> 📁 **GitHub Repository**: [HanaokaYuzu/Gemini-API](https://github.com/HanaokaYuzu/Gemini-API)
+
 ## Credentials
 
 1. Go to https://gemini.google.com and sign in
