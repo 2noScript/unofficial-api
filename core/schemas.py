@@ -57,6 +57,7 @@ class ChatCompletionResponse(BaseModel):
     object: str = Field("chat.completion", description="Object type")
     created: int = Field(..., description="Unix timestamp of creation")
     model: str = Field(..., description="Model used")
+    system_fingerprint: str | None = Field(None, description="System fingerprint")
     choices: list[Choice] = Field(..., description="List of completion choices")
     usage: Usage = Field(..., description="Token usage statistics")
     citation: str | None = Field(None, description="Citation (DeepSeek)")

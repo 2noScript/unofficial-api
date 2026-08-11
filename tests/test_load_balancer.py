@@ -86,3 +86,22 @@ class TestProfileLoadBalancer:
             assert p_inactive["id"] not in [p["id"] for p in active]
         finally:
             delete_profile(p_inactive["id"])
+
+    def test_handle_profile_failure(self):
+        p1 = create_profile("deepseek", "Failing DeepSeek", token="Bearer tok_fail")
+        session_data = {"profile_id": p1["id"]}
+
+        try:
+            load_balancer.handle_profile_failure(p1["id"], session_data)
+            assert session_data.get("profile_id") is None
+            active = load_balancer.get_active_profiles("deepseek")
+            assert p1["id"] not in [p["id"] for p in active]
+        finally:
+            delete_profile(p1["id"])
+
+    def test_is_retryable_error(self):
+        assert load_balancer.is_retryable_error("HTTP 401: Unauthorized token") is True
+        assert load_balancer.is_retryable_error("HTTP 429: Too Many Requests") is True
+        assert load_balancer.is_retryable_error("Gemini cookie is unauthenticated or expired") is True
+        assert load_balancer.is_retryable_error("SyntaxError: bad token") is False
+

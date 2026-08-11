@@ -13,8 +13,7 @@ from gemini_webapi.constants import Model as GeminiModel
 from .router import router
 from .helpers import _require_client, _resolve_model_name
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
-from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
-from core.utils import extract_text
+from core.utils import extract_text, make_stream_chunk, make_error_chunk, STREAM_END
 from core.session.adapters import get_adapter
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
@@ -64,16 +63,40 @@ async def chat_completions(
     ),
 ):
     session_data = getattr(request.state, "session_data", {})
-    try:
-        profile, _ = load_balancer.select_profile("gemini", session_data=session_data)
-        client = await gemini_pool.get_or_create_client(profile)
-    except NoActiveProfileError:
-        client = _require_client(request)
-        if isinstance(client, JSONResponse):
-            return client
-    except Exception as e:
+    active_profiles = load_balancer.get_active_profiles("gemini")
+    max_attempts = max(1, len(active_profiles))
+
+    client = None
+    profile_id = None
+
+    for attempt in range(max_attempts):
+        try:
+            profile, _ = load_balancer.select_profile("gemini", session_data=session_data)
+            profile_id = profile.get("id")
+            client = await gemini_pool.get_or_create_client(profile)
+            break
+        except NoActiveProfileError:
+            profile_id = None
+            client = _require_client(request)
+            if isinstance(client, JSONResponse):
+                return client
+            break
+        except Exception as e:
+            logger.warning("Gemini profile '%s' failed to initialize (%s). Failing over...", profile_id, e)
+            if profile_id:
+                load_balancer.handle_profile_failure(profile_id, session_data)
+                if profile_id in gemini_pool._clients:
+                    del gemini_pool._clients[profile_id]
+            if attempt < max_attempts - 1 and load_balancer.get_active_profiles("gemini"):
+                continue
+            return JSONResponse(
+                {"error": {"message": f"Gemini profile error: {str(e)}", "type": "server_error", "code": "upstream_error"}},
+                status_code=500,
+            )
+
+    if not client:
         return JSONResponse(
-            {"error": {"message": f"Gemini profile error: {str(e)}", "type": "server_error", "code": "upstream_error"}},
+            {"error": {"message": "Gemini client not initialized. Check active profiles or GEMINI_COOKIE.", "type": "server_error", "code": "upstream_error"}},
             status_code=500,
         )
 
@@ -95,7 +118,6 @@ async def chat_completions(
 
     # Session integration
     adapter = get_adapter("gemini")
-    session_data = getattr(request.state, "session_data", {})
 
     # Sync local history with incoming messages
     sync_and_get_history(messages, session_data)
@@ -108,8 +130,8 @@ async def chat_completions(
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
-    # Non-streaming with retry-on-session-error
-    for attempt in range(2):
+    # Non-streaming with retry-on-session-error and failover
+    for attempt in range(max_attempts):
         has_session = _has_provider_session(session_data) and attempt == 0
         prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)
         chat = _build_chat_session(client, session_data)
@@ -118,12 +140,25 @@ async def chat_completions(
             output = await client.generate_content(
                 prompt=prompt, model=resolved_model, chat=chat
             )
+            break
         except Exception as e:
             err_str = str(e)
-            if attempt == 0 and _has_provider_session(session_data):
-                logger.warning("Gemini session error, resetting: %s", err_str)
+            if load_balancer.is_retryable_error(err_str) or "unauthenticated" in err_str.lower():
+                logger.warning("Gemini profile '%s' failed on request (%s). Failing over...", profile_id, err_str)
+                if profile_id:
+                    load_balancer.handle_profile_failure(profile_id, session_data)
+                    if profile_id in gemini_pool._clients:
+                        del gemini_pool._clients[profile_id]
                 adapter.clear_provider_session(session_data)
-                continue
+                # Try getting next client if available
+                if attempt < max_attempts - 1 and load_balancer.get_active_profiles("gemini"):
+                    try:
+                        next_profile, _ = load_balancer.select_profile("gemini", session_data=session_data)
+                        profile_id = next_profile.get("id")
+                        client = await gemini_pool.get_or_create_client(next_profile)
+                        continue
+                    except Exception:
+                        pass
             return JSONResponse(
                 {"error": {"message": err_str, "type": "server_error", "code": "upstream_error"}},
                 status_code=500,

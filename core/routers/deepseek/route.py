@@ -11,8 +11,7 @@ from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from deepseek_api import DeepSeek, DEEPSEEK_MODELS, DEEPSEEK_MODEL_CONFIG
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
-from core.stream import make_stream_chunk, make_error_chunk, STREAM_END
-from core.utils import extract_text
+from core.utils import extract_text, make_stream_chunk, make_error_chunk, STREAM_END
 from core.session.adapters import get_adapter
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
@@ -69,39 +68,66 @@ def _run_chat(
     session_data: dict,
     adapter,
 ) -> dict:
-    auth_token = _get_auth(session_data)
-    user_message = extract_text(messages[-1].content) if messages else ""
-    history = session_data.get("history", [])
+    active_profiles = load_balancer.get_active_profiles("deepseek")
+    max_attempts = max(1, len(active_profiles))
 
-    has_provider_session = bool(session_data.get("deepseek_chat_session_id")) and not session_data.get("deepseek_force_virtual")
-    prompt = _build_prompt(history, user_message, has_provider_session)
-    session_kwargs = adapter.inject(session_data, {})
+    for attempt in range(max_attempts):
+        profile_id = None
+        try:
+            profile, _ = load_balancer.select_profile("deepseek", session_data=session_data)
+            profile_id = profile.get("id")
+            auth_token = profile.get("token", "")
+        except NoActiveProfileError:
+            auth_token = os.environ.get("DEEPSEEK_AUTH_TOKEN")
+            if not auth_token:
+                raise ValueError(
+                    "DeepSeek credentials not found. Create a DeepSeek profile or set DEEPSEEK_AUTH_TOKEN."
+                )
 
-    client = DeepSeek(auth_token)
-    chat = client.new_session(**session_kwargs)
+        if not auth_token.startswith("Bearer "):
+            auth_token = f"Bearer {auth_token}"
 
-    result = chat.send_message(prompt, model=model)
+        user_message = extract_text(messages[-1].content) if messages else ""
+        history = session_data.get("history", [])
 
-    if not result.get("ok"):
-        err_msg = result.get("content", "Unknown error")
-        if isinstance(err_msg, (bytes, bytearray)):
-            err_msg = err_msg.decode("utf-8", errors="replace")
-        last_status, last_error = _parse_deepseek_error(err_msg)
-        if last_status in (401, 403):
-            raise ValueError(last_error)
-        raise RuntimeError(last_error)
+        has_provider_session = bool(session_data.get("deepseek_chat_session_id")) and not session_data.get("deepseek_force_virtual")
+        prompt = _build_prompt(history, user_message, has_provider_session)
+        session_kwargs = adapter.inject(session_data, {})
 
-    if not session_data.get("deepseek_force_virtual"):
-        session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
+        client = DeepSeek(auth_token)
+        chat = client.new_session(**session_kwargs)
 
-    content = result.get("content", {})
-    if isinstance(content, dict):
-        response_text = content.get("response", "")
-        append_assistant_message(session_data, response_text)
-        return content
-    text = str(content)
-    append_assistant_message(session_data, text)
-    return {"response": text}
+        result = chat.send_message(prompt, model=model)
+
+        if not result.get("ok"):
+            err_msg = result.get("content", "Unknown error")
+            if isinstance(err_msg, (bytes, bytearray)):
+                err_msg = err_msg.decode("utf-8", errors="replace")
+            last_status, last_error = _parse_deepseek_error(err_msg)
+
+            if load_balancer.is_retryable_error(last_error) or last_status in (401, 403, 429):
+                logger.warning("DeepSeek profile '%s' failed with auth/rate-limit error (%s). Failing over...", profile_id, last_error)
+                if profile_id:
+                    load_balancer.handle_profile_failure(profile_id, session_data)
+                session_data["deepseek_force_virtual"] = True
+                if attempt < max_attempts - 1 and load_balancer.get_active_profiles("deepseek"):
+                    continue
+                raise ValueError(last_error)
+            raise RuntimeError(last_error)
+
+        if not session_data.get("deepseek_force_virtual"):
+            session_data.update(adapter.extract({"_chat_instance": chat}, session_data))
+
+        content = result.get("content", {})
+        if isinstance(content, dict):
+            response_text = content.get("response", "")
+            append_assistant_message(session_data, response_text)
+            return content
+        text = str(content)
+        append_assistant_message(session_data, text)
+        return {"response": text}
+
+    raise RuntimeError("All DeepSeek profile attempts failed.")
 
 
 async def _stream_chat_real(

@@ -69,5 +69,33 @@ class ProfileLoadBalancer:
         logger.debug("Selected profile '%s' via Round-Robin for provider '%s'", selected["id"], provider_type)
         return selected, False
 
+    def handle_profile_failure(
+        self,
+        profile_id: str,
+        session_data: dict | None = None
+    ) -> None:
+        """
+        Deactivate a failing profile and clear sticky affinity from session_data.
+        """
+        from core.profile import deactivate_profile
+        deactivate_profile(profile_id)
+        if session_data is not None and session_data.get("profile_id") == profile_id:
+            logger.info("Clearing sticky profile_id '%s' from session due to failure", profile_id)
+            session_data.pop("profile_id", None)
+
+    @staticmethod
+    def is_retryable_error(err: str | Exception) -> bool:
+        """
+        Check if an error is an auth, credential expiration, or rate-limit error that warrants failover retry.
+        """
+        msg = str(err).lower()
+        retryable_keywords = (
+            "401", "403", "429", "unauthorized", "unauthenticated",
+            "forbidden", "expired", "invalid cookie", "invalid token",
+            "rate limit", "too many requests", "40300"
+        )
+        return any(kw in msg for kw in retryable_keywords)
+
 
 load_balancer = ProfileLoadBalancer()
+

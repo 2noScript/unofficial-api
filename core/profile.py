@@ -113,3 +113,10 @@ def delete_profile(profile_id: str) -> bool:
     _save_profiles_data(data)
     logger.info("Deleted profile: %s", profile_id)
     return True
+
+
+def deactivate_profile(profile_id: str) -> dict | None:
+    """Deactivate a profile (set is_active=False) when auth or runtime errors occur."""
+    logger.warning("Deactivating profile '%s' due to runtime/auth error", profile_id)
+    return update_profile(profile_id, is_active=False)
+
