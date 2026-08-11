@@ -16,8 +16,11 @@ TTL_S = _ttl_days * 86400 if _ttl_days > 0 else float('inf')
 TTL_MS = TTL_S * 1000 if _ttl_days > 0 else float('inf')
 CLEANUP_INTERVAL_S = 3600  # every hour
 
-DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
-SESSIONS_FILE = DATA_DIR / 'sessions.json'
+def _get_data_dir() -> Path:
+    return Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
+
+def _get_sessions_file() -> Path:
+    return _get_data_dir() / 'sessions.json'
 
 
 @dataclass
@@ -42,9 +45,10 @@ class VirtualSessionStore:
     def _load_from_disk(self):
         """Load sessions from disk, discarding any that have already expired."""
         try:
-            if not SESSIONS_FILE.exists():
+            sessions_file = _get_sessions_file()
+            if not sessions_file.exists():
                 return
-            raw = json.loads(SESSIONS_FILE.read_text())
+            raw = json.loads(sessions_file.read_text())
             now = time.time()
             loaded = 0
             for vid, rec in raw.get('sessions', {}).items():
@@ -63,14 +67,16 @@ class VirtualSessionStore:
                 k: v for k, v in raw.get('assistant_cache', {}).items()
                 if v in self._sessions
             }
-            logger.info('Loaded %d sessions from disk (%s), TTL=%.1f days', loaded, SESSIONS_FILE, _ttl_days if _ttl_days > 0 else float('inf'))
+            sessions_file = _get_sessions_file()
+            logger.info('Loaded %d sessions from disk (%s), TTL=%.1f days', loaded, sessions_file, _ttl_days if _ttl_days > 0 else float('inf'))
         except Exception as e:
             logger.warning('Failed to load sessions from disk: %s', e)
 
     def _save_to_disk(self):
         """Persist current (already-cleaned) in-memory state to disk."""
         try:
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            _get_data_dir().mkdir(parents=True, exist_ok=True)
+            sessions_file = _get_sessions_file()
             with self._lock:
                 payload = {
                     'sessions': {
@@ -83,7 +89,7 @@ class VirtualSessionStore:
                     },
                     'assistant_cache': dict(self._assistant_cache),
                 }
-            SESSIONS_FILE.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+            sessions_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
         except Exception as e:
             logger.warning('Failed to save sessions to disk: %s', e)
 

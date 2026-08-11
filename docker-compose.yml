@@ -6,10 +6,8 @@ services:
       - "8088:8088"
     env_file:
       - .env
+    environment:
+      - UNOFFICIAL_API_DATA_DIR=/data
     volumes:
-      - unofficial-api-data:/data
+      - ./data:/data
     restart: unless-stopped
-
-volumes:
-  unofficial-api-data:
-

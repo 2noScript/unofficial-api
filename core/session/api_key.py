@@ -11,15 +11,19 @@ logger = logging.getLogger(__name__)
 
 API_KEY_PREFIX = 'sk'
 API_KEY_SECRET = os.environ.get('API_KEY_SECRET', 'unofficial-api-key-secret')
-DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
-KEYS_FILE = DATA_DIR / 'api_keys.json'
+
+def _get_data_dir() -> Path:
+    return Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
+
+def _get_keys_file() -> Path:
+    return _get_data_dir() / 'api_keys.json'
 
 def _ensure_data_dir():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _get_data_dir().mkdir(parents=True, exist_ok=True)
 
 def _get_machine_id() -> str:
     _ensure_data_dir()
-    mid_file = DATA_DIR / 'machine_id'
+    mid_file = _get_data_dir() / 'machine_id'
     if mid_file.exists():
         return mid_file.read_text().strip()
     
@@ -30,9 +34,10 @@ def _get_machine_id() -> str:
 
 def _load_keys() -> dict:
     _ensure_data_dir()
-    if KEYS_FILE.exists():
+    keys_file = _get_keys_file()
+    if keys_file.exists():
         try:
-            return json.loads(KEYS_FILE.read_text())
+            return json.loads(keys_file.read_text())
         except Exception:
             pass
     return {
@@ -43,7 +48,7 @@ def _load_keys() -> dict:
 
 def _save_keys(data: dict):
     _ensure_data_dir()
-    KEYS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    _get_keys_file().write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
 def generate_api_key(name: str = '') -> str:
     data = _load_keys()

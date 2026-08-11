@@ -7,9 +7,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
-PROFILES_FILE = DATA_DIR / 'profiles.json'
+def _get_data_dir() -> Path:
+    return Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
 
+def _get_profiles_file() -> Path:
+    return _get_data_dir() / 'profiles.json'
 
 import threading
 
@@ -17,14 +19,15 @@ _profiles_lock = threading.RLock()
 
 
 def _ensure_data_dir():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _get_data_dir().mkdir(parents=True, exist_ok=True)
 
 
 def _load_profiles_data() -> dict:
     _ensure_data_dir()
-    if PROFILES_FILE.exists():
+    profiles_file = _get_profiles_file()
+    if profiles_file.exists():
         try:
-            return json.loads(PROFILES_FILE.read_text())
+            return json.loads(profiles_file.read_text())
         except Exception as e:
             logger.error("Failed to read profiles file: %s", e)
     return {"profiles": {}}
@@ -32,9 +35,10 @@ def _load_profiles_data() -> dict:
 
 def _save_profiles_data(data: dict):
     _ensure_data_dir()
-    tmp_file = PROFILES_FILE.with_suffix(".json.tmp")
+    profiles_file = _get_profiles_file()
+    tmp_file = profiles_file.with_suffix(".json.tmp")
     tmp_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    os.replace(tmp_file, PROFILES_FILE)
+    os.replace(tmp_file, profiles_file)
 
 
 def create_profile(

@@ -4,7 +4,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API", "src"))
