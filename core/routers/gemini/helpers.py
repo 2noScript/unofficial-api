@@ -17,12 +17,24 @@ def _require_client(request: Request) -> GeminiClient | JSONResponse | None:
     client = _get_client(request)
     if not client:
         return JSONResponse(
-            {"error": "Gemini client not initialized. Check credentials."},
+            {
+                "error": {
+                    "message": "No active Gemini profile available or credentials missing. Please update cookie in data/profiles.json or via /v1/profiles.",
+                    "type": "authentication_error",
+                    "code": "no_active_profile"
+                }
+            },
             status_code=503,
         )
     if getattr(client, "account_status", None) == AccountStatus.UNAUTHENTICATED:
         return JSONResponse(
-            {"error": "Gemini client is unauthenticated (cookies expired or invalid). Please check GEMINI_COOKIE."},
+            {
+                "error": {
+                    "message": "Gemini client is unauthenticated (cookies expired or invalid). Please update cookie in data/profiles.json.",
+                    "type": "authentication_error",
+                    "code": "unauthenticated"
+                }
+            },
             status_code=503,
         )
     return client
