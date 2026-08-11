@@ -158,5 +158,74 @@ class ChatExecutionService:
             status_code=500,
         )
 
+    @classmethod
+    async def execute_stream(
+        cls,
+        strategy: BaseProviderStrategy,
+        request: Request,
+        messages: list,
+        model: str,
+        session_data: dict,
+        adapter,
+    ) -> StreamingResponse | JSONResponse:
+        """Execute streaming chat with unified session resilience and profile failover."""
+        client, profile_id, err_resp = await cls.resolve_client(strategy, request, session_data)
+        if err_resp or not client:
+            return err_resp or JSONResponse(
+                {"error": {"message": "Client not initialized.", "type": "server_error", "code": "upstream_error"}},
+                status_code=500,
+            )
+
+        provider_name = strategy.provider_name
+        raw_prompt = extract_text(messages[-1].get("content") if isinstance(messages[-1], dict) else messages[-1].content) if messages else ""
+        sync_and_get_history(messages, session_data)
+        history = session_data.get("history", [])
+
+        async def stream_generator():
+            response_id = f"chatcmpl-{int(time.time())}"
+            has_session = cls._has_provider_session(provider_name, session_data)
+            prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)
+
+            inject_kwargs = {"client": client}
+            if provider_name == "gemini":
+                from core.routers.gemini.chat import ChatSession
+                inject_kwargs["chat_cls"] = ChatSession
+            session_kwargs = adapter.inject(session_data, inject_kwargs)
+
+            collected_chunks = []
+            first = True
+            try:
+                gen = strategy.execute_stream(client, prompt, model, session_kwargs)
+                async for delta in gen:
+                    if delta:
+                        collected_chunks.append(delta)
+                        yield make_stream_chunk(model, delta, response_id, is_first=first)
+                        first = False
+
+                # Extract updated session state
+                if provider_name == "gemini" and "chat" in session_kwargs:
+                    session_data.update(adapter.extract(session_kwargs["chat"], session_data))
+
+                full_response = "".join(collected_chunks)
+                append_assistant_message(session_data, full_response)
+                yield make_stream_chunk(model, "", response_id, is_final=True)
+                yield STREAM_END
+            except Exception as e:
+                err_str = str(e)
+                if strategy.is_retryable_error(err_str):
+                    logger.warning("Profile '%s' failed on stream (%s). Deactivating profile...", profile_id, err_str)
+                    if profile_id:
+                        load_balancer.handle_profile_failure(profile_id, session_data)
+                        await strategy.handle_profile_cleanup(profile_id)
+                logger.error("%s stream execution error: %s", provider_name, err_str)
+                yield make_error_chunk(err_str)
+                yield STREAM_END
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
+
 
 chat_service = ChatExecutionService()

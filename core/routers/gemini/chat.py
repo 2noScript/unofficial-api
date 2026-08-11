@@ -124,13 +124,13 @@ async def chat_completions(
     history = session_data.get("history", [])
 
     if stream:
-        client, profile_id, err_response = await chat_service.resolve_client(gemini_strategy, request, session_data)
-        if err_response or not client:
-            return err_response or JSONResponse({"error": {"message": "Gemini client not available", "type": "server_error", "code": "upstream_error"}}, status_code=503)
-        return StreamingResponse(
-            _stream_gemini(client, raw_prompt, resolved_model, session_data, adapter, history, profile_id),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        return await chat_service.execute_stream(
+            strategy=gemini_strategy,
+            request=request,
+            messages=messages,
+            model=resolved_model,
+            session_data=session_data,
+            adapter=adapter,
         )
 
     return await chat_service.execute_chat(

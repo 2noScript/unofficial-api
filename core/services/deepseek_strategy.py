@@ -1,4 +1,5 @@
 import os
+import asyncio
 from typing import Any, AsyncGenerator
 from deepseek_api import DeepSeek
 from core.services.base import BaseProviderStrategy
@@ -40,20 +41,37 @@ class DeepSeekStrategy(BaseProviderStrategy):
         self, client: Any, prompt: str, model: str, session_kwargs: dict
     ) -> AsyncGenerator[str, None]:
         chat = client.new_session(**session_kwargs)
-        # Assuming DeepSeek streaming yields chunks
-        gen = chat.send_message(prompt, model=model, stream=True)
-        if hasattr(gen, "__aiter__"):
-            async for chunk in gen:
-                if isinstance(chunk, dict):
-                    yield chunk.get("text", "")
-                else:
-                    yield str(chunk)
-        elif hasattr(gen, "__iter__"):
-            for chunk in gen:
-                if isinstance(chunk, dict):
-                    yield chunk.get("text", "")
-                else:
-                    yield str(chunk)
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def run_stream() -> dict:
+            try:
+                for event_type, content in chat.send_message_stream(prompt, model=model):
+                    if event_type == "error":
+                        return {"ok": False, "content": content}
+                    elif event_type in ("content", "thought"):
+                        loop.call_soon_threadsafe(queue.put_nowait, content)
+                return {"ok": True}
+            except Exception as e:
+                return {"ok": False, "content": str(e)}
+
+        t = loop.run_in_executor(None, run_stream)
+
+        while True:
+            get_task = asyncio.create_task(queue.get())
+            done, _ = await asyncio.wait([get_task, t], return_when=asyncio.FIRST_COMPLETED)
+
+            if get_task in done:
+                chunk_text = get_task.result()
+                yield chunk_text
+            else:
+                get_task.cancel()
+                res = t.result()
+                if not res.get("ok"):
+                    raise RuntimeError(res.get("content", "Stream error"))
+                while not queue.empty():
+                    yield queue.get_nowait()
+                break
 
     async def handle_profile_cleanup(self, profile_id: str | None) -> None:
         pass

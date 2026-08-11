@@ -158,10 +158,13 @@ async def chat_completions(
     sync_and_get_history(body_messages, session_data)
 
     if stream:
-        return StreamingResponse(
-            _stream_chat_real(messages, model, session_data, adapter),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        return await chat_service.execute_stream(
+            strategy=deepseek_strategy,
+            request=request,
+            messages=body_messages,
+            model=model,
+            session_data=session_data,
+            adapter=adapter,
         )
 
     return await chat_service.execute_chat(
