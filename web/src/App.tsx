@@ -5,14 +5,13 @@ import {
   Plus, 
   Trash2, 
   RefreshCw, 
-  CheckCircle2, 
-  XCircle, 
   Activity, 
   ExternalLink,
   Edit2,
   Zap,
   Globe,
-  Database
+  Database,
+  AlertTriangle
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -20,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableHeader,
@@ -66,11 +66,16 @@ export function App() {
   const [newProfileType, setNewProfileType] = useState<"deepseek" | "gemini">("deepseek");
   const [newProfileName, setNewProfileName] = useState("");
   const [newProfileCredential, setNewProfileCredential] = useState("");
+  const [newProfileIsActive, setNewProfileIsActive] = useState(true);
 
   // Edit Profile Modal State
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [editName, setEditName] = useState("");
   const [editCredential, setEditCredential] = useState("");
+  const [editIsActive, setEditIsActive] = useState(true);
+
+  // Confirm Delete Profile Modal State
+  const [deletingProfile, setDeletingProfile] = useState<Profile | null>(null);
 
   // New Key Modal State
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
@@ -126,7 +131,7 @@ export function App() {
       const payload: any = {
         type: newProfileType,
         name: newProfileName,
-        is_active: true,
+        is_active: newProfileIsActive,
       };
       if (newProfileType === "deepseek") {
         payload.token = newProfileCredential;
@@ -144,6 +149,7 @@ export function App() {
         setShowAddProfileModal(false);
         setNewProfileName("");
         setNewProfileCredential("");
+        setNewProfileIsActive(true);
         refreshAll();
       } else {
         const err = await res.json();
@@ -169,11 +175,14 @@ export function App() {
     }
   };
 
-  const handleDeleteProfile = async (profileId: string) => {
-    if (!confirm("Are you sure you want to delete this profile?")) return;
+  const confirmDeleteProfile = async () => {
+    if (!deletingProfile) return;
     try {
-      const res = await fetch(`/v1/profiles/${profileId}`, { method: "DELETE" });
-      if (res.ok) refreshAll();
+      const res = await fetch(`/v1/profiles/${deletingProfile.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setDeletingProfile(null);
+        refreshAll();
+      }
     } catch (e) {
       console.error(e);
     }
@@ -183,7 +192,10 @@ export function App() {
     e.preventDefault();
     if (!editingProfile) return;
     try {
-      const payload: any = { name: editName };
+      const payload: any = { 
+        name: editName,
+        is_active: editIsActive
+      };
       if (editCredential) {
         if (editingProfile.type === "deepseek") payload.token = editCredential;
         else payload.cookie = editCredential;
@@ -392,8 +404,7 @@ export function App() {
                     <TableRow>
                       <TableHead className="w-[120px]">Type</TableHead>
                       <TableHead>Profile Info</TableHead>
-                      <TableHead>Credential Preview</TableHead>
-                      <TableHead className="w-[140px]">Status</TableHead>
+                      <TableHead className="w-[160px]">Active Status</TableHead>
                       <TableHead className="w-[180px]">Updated At</TableHead>
                       <TableHead className="text-right w-[100px]">Actions</TableHead>
                     </TableRow>
@@ -411,35 +422,15 @@ export function App() {
                           <div className="text-xs font-mono text-muted-foreground">ID: {p.id}</div>
                         </TableCell>
                         <TableCell>
-                          <code className="text-xs bg-muted/60 px-2 py-1 rounded border border-border font-mono text-muted-foreground">
-                            {p.type === "deepseek"
-                              ? p.token ? `${p.token.slice(0, 18)}...` : "None"
-                              : p.cookie ? `${p.cookie.slice(0, 24)}...` : "None"}
-                          </code>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleProfileActive(p)}
-                            className={`gap-1.5 text-xs ${
-                              p.is_active
-                                ? "border-emerald-800/40 text-emerald-400 hover:bg-emerald-950/40"
-                                : "border-destructive/40 text-destructive hover:bg-destructive/10"
-                            }`}
-                          >
-                            {p.is_active ? (
-                              <>
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Active</span>
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="w-3.5 h-3.5" />
-                                <span>Inactive</span>
-                              </>
-                            )}
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={p.is_active}
+                              onCheckedChange={() => handleToggleProfileActive(p)}
+                            />
+                            <span className={`text-xs font-medium ${p.is_active ? "text-emerald-400" : "text-muted-foreground"}`}>
+                              {p.is_active ? "Active" : "Inactive"}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {p.updated_at ? new Date(p.updated_at).toLocaleString() : "N/A"}
@@ -452,6 +443,7 @@ export function App() {
                               onClick={() => {
                                 setEditingProfile(p);
                                 setEditName(p.name);
+                                setEditIsActive(p.is_active);
                                 setEditCredential("");
                               }}
                               title="Edit Profile"
@@ -461,7 +453,7 @@ export function App() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDeleteProfile(p.id)}
+                              onClick={() => setDeletingProfile(p)}
                               className="text-destructive hover:bg-destructive/10"
                               title="Delete Profile"
                             >
@@ -516,6 +508,37 @@ export function App() {
         )}
       </main>
 
+      {/* Confirm Delete Profile Modal */}
+      {deletingProfile && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="max-w-md w-full p-2">
+            <CardHeader className="flex flex-row items-center gap-3 pb-2">
+              <div className="p-2.5 bg-destructive/10 text-destructive rounded-xl border border-destructive/20">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Xác nhận xoá Profile</CardTitle>
+                <CardDescription>Hành động này không thể hoàn tác</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-foreground">
+                Bạn có chắc chắn muốn xoá Profile <strong className="text-foreground">{deletingProfile.name}</strong> (<code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{deletingProfile.id}</code>) không?
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button type="button" variant="ghost" onClick={() => setDeletingProfile(null)}>
+                  Hủy bỏ
+                </Button>
+                <Button variant="destructive" onClick={confirmDeleteProfile}>
+                  Xoá Profile
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Add Profile Modal */}
       {showAddProfileModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -562,13 +585,23 @@ export function App() {
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-3">
-                  <Button type="button" variant="ghost" onClick={() => setShowAddProfileModal(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">
-                    Save Profile
-                  </Button>
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={newProfileIsActive}
+                      onCheckedChange={(checked) => setNewProfileIsActive(!!checked)}
+                    />
+                    <span className="text-xs text-muted-foreground">Active Status</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="ghost" onClick={() => setShowAddProfileModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit">
+                      Save Profile
+                    </Button>
+                  </div>
                 </div>
               </form>
             </CardContent>
@@ -608,13 +641,25 @@ export function App() {
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-3">
-                  <Button type="button" variant="ghost" onClick={() => setEditingProfile(null)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">
-                    Update Profile
-                  </Button>
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={editIsActive}
+                      onCheckedChange={(checked) => setEditIsActive(!!checked)}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {editIsActive ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="ghost" onClick={() => setEditingProfile(null)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit">
+                      Update Profile
+                    </Button>
+                  </div>
                 </div>
               </form>
             </CardContent>
