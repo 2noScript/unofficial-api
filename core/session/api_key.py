@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 API_KEY_PREFIX = 'sk'
 API_KEY_SECRET = os.environ.get('API_KEY_SECRET', 'unofficial-api-key-secret')
-DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', Path.home() / '.unofficial-api'))
+DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
 KEYS_FILE = DATA_DIR / 'api_keys.json'
 
 def _ensure_data_dir():

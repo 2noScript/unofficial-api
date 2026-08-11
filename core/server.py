@@ -33,6 +33,7 @@ except ImportError:
     gemini_router = None
 
 from core.routers.keys import router as keys_router
+from core.routers.profiles import router as profiles_router
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from core.session import (
@@ -133,6 +134,7 @@ if deepseek_router:
 if gemini_router:
     app.include_router(gemini_router, prefix="/v1/gemini")
 app.include_router(keys_router, prefix="/v1/keys")
+app.include_router(profiles_router, prefix="/v1/profiles")
 
 
 @app.get("/health", summary="Health check", tags=["System"])

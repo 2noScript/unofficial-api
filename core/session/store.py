@@ -16,7 +16,7 @@ TTL_S = _ttl_days * 86400 if _ttl_days > 0 else float('inf')
 TTL_MS = TTL_S * 1000 if _ttl_days > 0 else float('inf')
 CLEANUP_INTERVAL_S = 3600  # every hour
 
-DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', Path.home() / '.unofficial-api'))
+DATA_DIR = Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
 SESSIONS_FILE = DATA_DIR / 'sessions.json'
 
 
