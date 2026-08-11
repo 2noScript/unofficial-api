@@ -3,19 +3,18 @@ import json
 import uuid
 import time
 import logging
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_profiles_lock = threading.RLock()
 
 def _get_data_dir() -> Path:
     return Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
 
 def _get_profiles_file() -> Path:
     return _get_data_dir() / 'profiles.json'
-
-import threading
-
-_profiles_lock = threading.RLock()
 
 
 def _ensure_data_dir():

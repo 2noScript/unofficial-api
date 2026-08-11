@@ -9,18 +9,9 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(BASE, "Gemini-API", "src"))
 
-try:
-    from core.routers.deepseek import router as ds_router
-except ImportError:
-    ds_router = None
-
-try:
-    from core.routers.gemini import router as gm_router
-except ImportError:
-    gm_router = None
-
+from core.routers.deepseek import router as ds_router
+from core.routers.gemini import router as gm_router
 from core.routers.keys import router as keys_router
 from core.routers.profiles import router as profiles_router
 
@@ -54,10 +45,8 @@ def app():
             request.state.virtual_session_id = sid
         return await call_next(request)
 
-    if ds_router:
-        app.include_router(ds_router, prefix="/v1/deepseek")
-    if gm_router:
-        app.include_router(gm_router, prefix="/v1/gemini")
+    app.include_router(ds_router, prefix="/v1/deepseek")
+    app.include_router(gm_router, prefix="/v1/gemini")
     app.include_router(keys_router, prefix="/v1/keys")
     app.include_router(profiles_router, prefix="/v1/profiles")
 

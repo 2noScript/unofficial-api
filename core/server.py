@@ -1,35 +1,20 @@
 import os
-import sys
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
-
-load_dotenv(override=False)
-
-BASE = os.path.dirname(os.path.abspath(__file__))
-
-import logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
-try:
-    from core.routers.deepseek import router as deepseek_router
-except ImportError:
-    deepseek_router = None
-
-try:
-    from core.routers.gemini import router as gemini_router
-except ImportError:
-    gemini_router = None
-
+from core.routers.deepseek import router as deepseek_router
+from core.routers.gemini import router as gemini_router
 from core.routers.keys import router as keys_router
 from core.routers.profiles import router as profiles_router
-
-from starlette.middleware.base import BaseHTTPMiddleware
 from core.session import (
     session_store,
     session_manager,
@@ -37,8 +22,11 @@ from core.session import (
     get_api_key_hash,
     VirtualSessionMiddleware
 )
-from core.utils import parse_cookie
 
+load_dotenv(override=False)
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def _extract_provider(path: str) -> str:
     parts = [p for p in path.split('/') if p]
@@ -98,10 +86,8 @@ session_middleware = VirtualSessionMiddleware(
 )
 app.add_middleware(BaseHTTPMiddleware, dispatch=session_middleware)
 
-if deepseek_router:
-    app.include_router(deepseek_router, prefix="/v1/deepseek")
-if gemini_router:
-    app.include_router(gemini_router, prefix="/v1/gemini")
+app.include_router(deepseek_router, prefix="/v1/deepseek")
+app.include_router(gemini_router, prefix="/v1/gemini")
 app.include_router(keys_router, prefix="/v1/keys")
 app.include_router(profiles_router, prefix="/v1/profiles")
 
@@ -117,9 +103,6 @@ def health():
         "gemini_active_profiles": gem_active,
     }
 
-
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
 WEB_DIST = Path(BASE) / ".." / "web" / "dist"
 if WEB_DIST.exists():
