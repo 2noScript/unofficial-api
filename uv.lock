@@ -470,6 +470,26 @@ wheels = [
 ]
 
 [[package]]
+name = "gemini-webapi"
+source = { editable = "Gemini-API" }
+dependencies = [
+    { name = "curl-cffi" },
+    { name = "loguru" },
+    { name = "orjson" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "browser-cookie3", marker = "extra == 'browser'" },
+    { name = "curl-cffi", specifier = ">=0.15.0" },
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "orjson", specifier = ">=3.11.7" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+]
+provides-extras = ["browser"]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1337,6 +1357,7 @@ dependencies = [
     { name = "curl-cffi" },
     { name = "deepseek-api" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "gemini-webapi" },
     { name = "loguru" },
     { name = "lxml-html-clean" },
     { name = "orjson" },
@@ -1359,6 +1380,7 @@ requires-dist = [
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "deepseek-api", editable = "deepseek-api" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.138.0" },
+    { name = "gemini-webapi", editable = "Gemini-API" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "lxml-html-clean", specifier = ">=0.1.1" },
     { name = "orjson", specifier = ">=3.11.7" },

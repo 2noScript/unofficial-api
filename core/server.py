@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 load_dotenv(override=False)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(BASE, "..", "Gemini-API", "src"))
 
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -16,11 +15,6 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from fastapi.responses import JSONResponse, RedirectResponse
-
-try:
-    from gemini_webapi import GeminiClient
-except ImportError:
-    GeminiClient = None
 
 try:
     from core.routers.deepseek import router as deepseek_router
