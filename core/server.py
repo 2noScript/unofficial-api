@@ -43,7 +43,7 @@ from core.session import (
     get_api_key_hash,
     VirtualSessionMiddleware
 )
-from core.utils import parse_cookie, validate_env
+from core.utils import parse_cookie
 
 
 def _extract_provider(path: str) -> str:
@@ -53,36 +53,9 @@ def _extract_provider(path: str) -> str:
     return 'unknown'
 
 
-validate_env()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Gemini
-    gemini_cookie = os.environ.get("GEMINI_COOKIE") or ""
-    secure_1psid = parse_cookie(gemini_cookie, "__Secure-1PSID")
-    secure_1psidts = parse_cookie(gemini_cookie, "__Secure-1PSIDTS")
-    gemini_client = None
-    if GeminiClient and secure_1psid:
-        gemini_client = GeminiClient(
-            secure_1psid=secure_1psid, secure_1psidts=secure_1psidts,)
-        try:
-            await gemini_client.init(timeout=30, auto_close=False)
-            from gemini_webapi.constants import AccountStatus
-            if getattr(gemini_client, "account_status", None) == AccountStatus.UNAUTHENTICATED:
-                print("[Gemini] Init warning: Account status is UNAUTHENTICATED (cookies invalid or expired). Disabling gemini_client.", file=sys.stderr)
-                await gemini_client.close()
-                gemini_client = None
-        except Exception as e:
-            print(f"[Gemini] Init failed: {e}", file=sys.stderr)
-            gemini_client = None
-
-    app.state.gemini_client = gemini_client
-
     yield
-
-    if gemini_client:
-        await gemini_client.close()
     from core.gemini_pool import gemini_pool
     await gemini_pool.close_all()
 
@@ -92,7 +65,7 @@ security_bearer = HTTPBearer(auto_error=False)
 app = FastAPI(
     title="Unofficial API Gateway",
     version="0.1.0",
-    description="OpenAI-compatible API Gateway for DeepSeek and Gemini.",
+    description="OpenAI-compatible API Gateway for DeepSeek and Gemini with Multi-Profile Load Balancing.",
     dependencies=[Depends(security_bearer)],
     lifespan=lifespan,
 )
@@ -141,10 +114,13 @@ app.include_router(profiles_router, prefix="/v1/profiles")
 
 @app.get("/health", summary="Health check", tags=["System"])
 def health():
-    gemini_ok = getattr(app.state, "gemini_client", None) is not None
+    from core.load_balancer import load_balancer
+    ds_active = len(load_balancer.get_active_profiles("deepseek"))
+    gem_active = len(load_balancer.get_active_profiles("gemini"))
     return {
         "status": "ok",
-        "gemini_connected": gemini_ok,
+        "deepseek_active_profiles": ds_active,
+        "gemini_active_profiles": gem_active,
     }
 
 

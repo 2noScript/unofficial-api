@@ -4,7 +4,8 @@ class TestHealth:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
-        assert isinstance(data["gemini_connected"], bool)
+        assert isinstance(data["deepseek_active_profiles"], int)
+        assert isinstance(data["gemini_active_profiles"], int)
 
     def test_root_redirects(self, client, auth_headers):
         resp = client.get("/", headers=auth_headers, follow_redirects=False)

@@ -9,8 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(BASE, "Gemini-API/src"))
-sys.path.insert(0, os.path.join(BASE, "metaai-api", "src"))
+sys.path.insert(0, os.path.join(BASE, "Gemini-API", "src"))
 
 try:
     from core.routers.deepseek import router as ds_router
@@ -22,22 +21,8 @@ try:
 except ImportError:
     gm_router = None
 
-try:
-    from core.routers.grok import router as gk_router
-except ImportError:
-    gk_router = None
-
-try:
-    from core.routers.metaai import router as ma_router
-except ImportError:
-    ma_router = None
-
-try:
-    from core.routers.notebooklm import router as nl_router
-except ImportError:
-    nl_router = None
-
 from core.routers.keys import router as keys_router
+from core.routers.profiles import router as profiles_router
 
 
 import uuid
@@ -47,11 +32,9 @@ SESSION_STORE: dict[str, dict] = {}
 
 @asynccontextmanager
 async def noop_lifespan(app: FastAPI):
-    app.state.gemini_client = MagicMock()
-    app.state.notebooklm_client = AsyncMock()
-    app.state.metaai_client = MagicMock()
-    app.state.grok_client = MagicMock()
     yield
+    from core.gemini_pool import gemini_pool
+    await gemini_pool.close_all()
 
 
 @pytest.fixture
@@ -75,22 +58,18 @@ def app():
         app.include_router(ds_router, prefix="/v1/deepseek")
     if gm_router:
         app.include_router(gm_router, prefix="/v1/gemini")
-    if gk_router:
-        app.include_router(gk_router, prefix="/v1/grok")
-    if ma_router:
-        app.include_router(ma_router, prefix="/v1/metaai")
-    if nl_router:
-        app.include_router(nl_router, prefix="/v1/notebooklm")
     app.include_router(keys_router, prefix="/v1/keys")
+    app.include_router(profiles_router, prefix="/v1/profiles")
 
     @app.get("/health")
     def health():
+        from core.load_balancer import load_balancer
+        ds_active = len(load_balancer.get_active_profiles("deepseek"))
+        gem_active = len(load_balancer.get_active_profiles("gemini"))
         return {
             "status": "ok",
-            "gemini_connected": True,
-            "notebooklm_connected": True,
-            "metaai_connected": True,
-            "grok_connected": True,
+            "deepseek_active_profiles": ds_active,
+            "gemini_active_profiles": gem_active,
         }
 
     @app.get("/")
