@@ -13,9 +13,9 @@ class DeepSeekStrategy(BaseProviderStrategy):
         return "deepseek"
 
     async def get_or_create_client(self, profile: dict | None, request: Any) -> Any:
-        auth_token = profile.get("token", "") if profile else os.environ.get("DEEPSEEK_AUTH_TOKEN")
+        auth_token = profile.get("token", "") if profile else ""
         if not auth_token:
-            raise ValueError("DeepSeek credentials not found. Create a DeepSeek profile or set DEEPSEEK_AUTH_TOKEN.")
+            raise ValueError("DeepSeek profile has no valid token.")
         if not auth_token.startswith("Bearer "):
             auth_token = f"Bearer {auth_token}"
         return DeepSeek(auth_token)

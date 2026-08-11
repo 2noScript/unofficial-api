@@ -1,4 +1,5 @@
 import logging
+from gemini_webapi import ChatSession
 from .base import BaseSessionAdapter
 
 logger = logging.getLogger(__name__)
@@ -13,10 +14,7 @@ class GeminiAdapter(BaseSessionAdapter):
         client = request_args.get('client')
         if not client:
             return {}
-        chat_cls = request_args.get('chat_cls')
-        if not chat_cls:
-            from gemini_webapi import ChatSession
-            chat_cls = ChatSession
+        chat_cls = request_args.get('chat_cls', ChatSession)
         metadata = data.get('gemini_metadata')
         if metadata:
             chat = chat_cls(geminiclient=client, metadata=metadata)

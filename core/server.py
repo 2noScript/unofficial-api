@@ -13,8 +13,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.routers.deepseek import router as deepseek_router
 from core.routers.gemini import router as gemini_router
+from core.routers.gemini.pool import gemini_pool
 from core.routers.keys import router as keys_router
 from core.routers.profiles import router as profiles_router
+from core.load_balancer import load_balancer
 from core.session import (
     session_store,
     session_manager,
@@ -38,7 +40,6 @@ def _extract_provider(path: str) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
-    from core.routers.gemini.pool import gemini_pool
     await gemini_pool.close_all()
 
 
@@ -94,7 +95,6 @@ app.include_router(profiles_router, prefix="/v1/profiles")
 
 @app.get("/health", summary="Health check", tags=["System"])
 def health():
-    from core.load_balancer import load_balancer
     ds_active = len(load_balancer.get_active_profiles("deepseek"))
     gem_active = len(load_balancer.get_active_profiles("gemini"))
     return {

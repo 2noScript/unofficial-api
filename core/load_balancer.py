@@ -1,6 +1,6 @@
 import logging
 from typing import Tuple
-from core.profile import list_profiles
+from core.profile import list_profiles, deactivate_profile
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,6 @@ class ProfileLoadBalancer:
         """
         Deactivate a failing profile and clear sticky affinity from session_data.
         """
-        from core.profile import deactivate_profile
         deactivate_profile(profile_id)
         if session_data is not None and session_data.get("profile_id") == profile_id:
             logger.info("Clearing sticky profile_id '%s' from session due to failure", profile_id)

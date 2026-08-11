@@ -1,15 +1,17 @@
 import time
 import logging
 from typing import Any, AsyncGenerator
+
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
-
-logger = logging.getLogger(__name__)
+from gemini_webapi import ChatSession
 
 from core.services.base import BaseProviderStrategy
 from core.load_balancer import load_balancer, NoActiveProfileError
 from core.utils import extract_text, make_stream_chunk, make_error_chunk, STREAM_END
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
+
+logger = logging.getLogger(__name__)
 
 
 class ChatExecutionService:
@@ -98,7 +100,6 @@ class ChatExecutionService:
             # Build session kwargs
             inject_kwargs = {"client": client}
             if provider_name == "gemini":
-                from core.routers.gemini.chat import ChatSession
                 inject_kwargs["chat_cls"] = ChatSession
             session_kwargs = adapter.inject(session_data, inject_kwargs)
 
@@ -188,7 +189,6 @@ class ChatExecutionService:
 
             inject_kwargs = {"client": client}
             if provider_name == "gemini":
-                from core.routers.gemini.chat import ChatSession
                 inject_kwargs["chat_cls"] = ChatSession
             session_kwargs = adapter.inject(session_data, inject_kwargs)
 

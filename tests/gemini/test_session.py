@@ -42,7 +42,7 @@ def gemini_client(gemini_session_app):
 
 class TestGeminiSession:
     def test_multiturn_fallback(self, gemini_client):
-        with patch("core.routers.gemini.chat.ChatSession") as MockChatSession:
+        with patch("core.services.chat_service.ChatSession") as MockChatSession:
             mock_chat = MockChatSession.return_value
             mock_chat.cid = None
             mock_chat.session_state = None
@@ -89,7 +89,7 @@ class TestGeminiSession:
             assert "john" in content
 
     def test_provider_session_persists(self, gemini_client):
-        with patch("core.routers.gemini.chat.ChatSession") as MockChatSession:
+        with patch("core.services.chat_service.ChatSession") as MockChatSession:
             mock_chat = MockChatSession.return_value
             mock_chat.cid = None
             mock_chat.session_state = None
@@ -123,7 +123,7 @@ class TestGeminiSession:
             assert data.get("gemini_session_state") == {"turn": 2}
 
     def test_stream_session_persists(self, gemini_client):
-        with patch("core.routers.gemini.chat.ChatSession") as MockChatSession:
+        with patch("core.services.chat_service.ChatSession") as MockChatSession:
             mock_chat = MockChatSession.return_value
             mock_chat.cid = None
             mock_chat.session_state = None
