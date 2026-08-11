@@ -1,6 +1,6 @@
 ---
 name: unofficial-api-chat
-description: Chat / code generation via Unofficial API using OpenAI /v1/chat/completions format with streaming support across DeepSeek, Gemini, Grok (xAI), Meta AI (Llama 4), and NotebookLM. Use when the user wants to ask an LLM, generate code, summarize text, or run prompts through Unofficial API.
+description: Chat / code generation via Unofficial API using OpenAI /v1/chat/completions format with streaming support across DeepSeek and Gemini. Use when the user wants to ask an LLM, generate code, summarize text, or run prompts through Unofficial API.
 ---
 
 # Unofficial API — Chat
@@ -15,18 +15,12 @@ Requires `UNOFFICIAL_API_URL` and `UNOFFICIAL_API_KEY`. See https://raw.githubus
 |---|---|
 | DeepSeek | `/v1/deepseek/chat/completions` |
 | Gemini | `/v1/gemini/chat/completions` |
-| Grok | `/v1/grok/chat/completions` |
-| Meta AI | `/v1/metaai/chat/completions` |
-| NotebookLM | `/v1/notebooklm/chat/completions` |
 
 ## Discover
 
 ```bash
 curl $UNOFFICIAL_API_URL/v1/deepseek/models | jq '.data[].id'
 curl $UNOFFICIAL_API_URL/v1/gemini/models  | jq '.data[].id'
-curl $UNOFFICIAL_API_URL/v1/grok/models    | jq '.data[].id'
-curl $UNOFFICIAL_API_URL/v1/metaai/models  | jq '.data[].id'
-curl $UNOFFICIAL_API_URL/v1/notebooklm/models | jq '.data[].id'
 ```
 
 ## Request format

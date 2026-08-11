@@ -19,11 +19,8 @@ core/session/
 └── adapters/
     ├── base.py              # BaseSessionAdapter interface
     ├── gemini.py            # Gemini: cid + session_state
-    ├── notebooklm.py        # NotebookLM: conversation_id
     ├── deepseek.py          # DeepSeek: chat_session_id
-    ├── grok.py              # Grok: (placeholder)
-    ├── metaai.py            # Meta AI: (placeholder)
-    └── __init__.py          # exports all adapters
+    └── __init__.py          # exports adapters
 ```
 
 ---

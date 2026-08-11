@@ -1,16 +1,16 @@
 ---
 name: unofficial-api
-description: Entry point for Unofficial API — OpenAI-compatible REST gateway for DeepSeek, Gemini, Grok (xAI), Meta AI (Llama 4), and NotebookLM. Use when the user mentions Unofficial API, UNOFFICIAL_API_URL, or wants AI without writing provider boilerplate. This skill covers setup + indexes capability skills; fetch the relevant capability SKILL.md from the URLs below when needed.
+description: Entry point for Unofficial API — OpenAI-compatible REST gateway for DeepSeek and Gemini. Use when the user mentions Unofficial API, UNOFFICIAL_API_URL, or wants AI without writing provider boilerplate. This skill covers setup + indexes capability skills; fetch the relevant capability SKILL.md from the URLs below when needed.
 ---
 
 # Unofficial API
 
-OpenAI-compatible REST gateway aggregating DeepSeek, Gemini, Grok, Meta AI, and NotebookLM into a single endpoint. One URL, many models.
+OpenAI-compatible REST gateway aggregating DeepSeek and Gemini into a single endpoint with multi-profile load balancing. One URL, many models.
 
 ## Setup
 
 ```bash
-export UNOFFICIAL_API_URL="http://localhost:8000"      # local or deployed URL
+export UNOFFICIAL_API_URL="http://localhost:8088"      # local or deployed URL
 ```
 
 All requests: `${UNOFFICIAL_API_URL}/v1/{provider}/chat/completions`.
@@ -19,44 +19,35 @@ Verify: `curl $UNOFFICIAL_API_URL/health` → `{"status":"ok"}`.
 
 ## Authentication
 
-All chat and model endpoints require an API key. Generate one first (no auth needed to bootstrap):
+Chat endpoints require an API key if authentication is enabled (`DISABLE_AUTH=false`). Generate one first:
 
 ```bash
 curl -X POST $UNOFFICIAL_API_URL/v1/keys/generate \
   -H "Content-Type: application/json" \
   -d '{"name": "my-key"}'
-# → {"api_key": "ua-xxxxxxxx-xxxxxx-xxxxxxxx", "name": "my-key"}
 
-export UNOFFICIAL_API_KEY="ua-xxxxxxxx-xxxxxx-xxxxxxxx"
+export UNOFFICIAL_API_KEY="sk-xxxxxxxx-xxxx-xxxx"
 ```
 
-Pass the key on every request using one of:
+Pass the key on every request:
 ```
-Authorization: Bearer ua-xxxxxxxx-xxxxxx-xxxxxxxx
-# or
-X-Api-Key: ua-xxxxxxxx-xxxxxx-xxxxxxxx
+Authorization: Bearer sk-xxxxxxxx-xxxx-xxxx
 ```
 
-## Providers
+## Profiles & Multi-Account Load Balancing
 
-Each provider has its own prefix under `/v1/`. Credentials are set via environment variables at server startup.
+Profiles are managed via `/v1/profiles` and stored in `data/profiles.json`. Chat completions automatically load-balance across active profiles (`is_active: true`) using Round-Robin, with sticky session affinity when using `X-Session-Id`.
 
-| Provider | Prefix | Auth (env) |
+| Provider | Prefix | Credential Field |
 |---|---|---|
-| DeepSeek | `/v1/deepseek` | `DEEPSEEK_COOKIE` + `DEEPSEEK_AUTH_TOKEN` |
-| Gemini | `/v1/gemini` | `GEMINI_COOKIE` |
-| Grok (xAI) | `/v1/grok` | `GROK_COOKIE` |
-| Meta AI | `/v1/metaai` | `META_AI_COOKIE` |
-| NotebookLM | `/v1/notebooklm` | `NOTEBOOKLM_STORAGE_PATH` |
+| DeepSeek | `/v1/deepseek` | `token` |
+| Gemini | `/v1/gemini` | `cookie` |
 
 ## Discover models
 
 ```bash
-curl $UNOFFICIAL_API_URL/v1/deepseek/models      # deepseek-v3, deepseek-r1, deepseek-v4, deepseek-r4
-curl $UNOFFICIAL_API_URL/v1/gemini/models         # gemini-3-flash, gemini-3-pro, gemini-3-flash-thinking, ...
-curl $UNOFFICIAL_API_URL/v1/grok/models           # grok-4.20-auto, grok-4.20-fast, grok-4.20-reasoning, ...
-curl $UNOFFICIAL_API_URL/v1/metaai/models         # llama-4
-curl $UNOFFICIAL_API_URL/v1/notebooklm/models     # notebooklm-2-0
+curl $UNOFFICIAL_API_URL/v1/deepseek/models      # deepseek-v3, deepseek-r1
+curl $UNOFFICIAL_API_URL/v1/gemini/models        # gemini-3-flash, gemini-3-pro, ...
 ```
 
 All return OpenAI-compatible shape:
@@ -73,10 +64,12 @@ All return OpenAI-compatible shape:
 |---|---|---|---|
 | `POST` | `/v1/{provider}/chat/completions` | ✅ | Chat completion (OpenAI format) |
 | `GET` | `/v1/{provider}/models` | ✅ | List models for provider |
-| `GET` | `/health` | ❌ | Health check with provider connection status |
+| `POST` | `/v1/profiles` | ❌ | Create a new profile |
+| `GET` | `/v1/profiles` | ❌ | List profiles |
+| `GET` | `/health` | ❌ | Health check |
 | `GET` | `/` | ❌ | Redirect to API docs (Swagger UI) |
 | `POST` | `/v1/keys/generate` | ❌ | Generate a new API key |
-| `GET` | `/v1/keys` | ❌ | List all API keys (masked) |
+| `GET` | `/v1/keys` | ❌ | List all API keys |
 | `POST` | `/v1/keys/revoke` | ❌ | Deactivate an API key |
 
 ## Error format
@@ -106,6 +99,7 @@ When the user needs a specific capability, fetch that skill's `SKILL.md` from it
 
 - `401 missing_api_key` → add `Authorization: Bearer <key>` header
 - `401 invalid_api_key` → key is wrong or revoked; generate a new one via `POST /v1/keys/generate`
-- `503` → check provider credentials in `.env`
+- `503` → check active profiles via `GET /v1/profiles`
 - `400` → check `model` and `messages` fields
 - `500` → upstream provider error; check provider status
+

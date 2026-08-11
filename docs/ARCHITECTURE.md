@@ -2,19 +2,14 @@
 
 ## Overview
 
-This project is a **unified OpenAI-compatible API gateway** that proxies requests to 5 different AI providers:
+This project is a **unified OpenAI-compatible API gateway** with dynamic multi-profile load balancing, proxying requests to DeepSeek and Gemini:
 
 | Provider | SDK Type | Async/Sync | Auth Method |
 |---|---|---|---|
-| DeepSeek | Vendored (`sys.path`) | Sync → ThreadPoolExecutor | Cookie |
-| Gemini | Vendored (`sys.path`) | Async | Cookie |
-| NotebookLM | PyPI (`notebooklm-py`) | Async | Storage file |
-| Meta AI | Vendored (`sys.path`) | Sync → ThreadPoolExecutor | Cookie |
-| Grok | Vendored (`sys.path`) | Async | Cookie |
+| DeepSeek | Vendored (`sys.path`) | Sync → ThreadPoolExecutor | Profile Token |
+| Gemini | Vendored (`sys.path`) | Async | Profile Cookie |
 
-All providers expose two OpenAI-compatible endpoints (`/models`, `/chat/completions`) plus provider-specific endpoints under `/v1/{provider}/...`.
-
-NotebookLM additionally exposes media generation endpoints (audio, video, cinematic video) under `/v1/notebooklm/notebooks/{id}/artifacts/...`.
+Both providers expose two OpenAI-compatible endpoints (`/models`, `/chat/completions`) plus profile management endpoints (`/v1/profiles`).
 
 ---
 
@@ -23,51 +18,25 @@ NotebookLM additionally exposes media generation endpoints (audio, video, cinema
 ```
 unofficial-api/
 ├── core/
-│   ├── __init__.py
 │   ├── server.py              # FastAPI app, lifespan, router registration
-│   ├── schemas.py             # Shared Pydantic models (OpenAI-compatible + provider-specific)
+│   ├── profile.py             # Profile storage (profiles.json) & CRUD
+│   ├── load_balancer.py       # Multi-profile Round-Robin load balancer & session affinity
+│   ├── gemini_pool.py         # Async connection pool for Gemini clients
+│   ├── schemas.py             # Shared Pydantic models
 │   └── routers/
-│       ├── __init__.py
-│       ├── deepseek/           # 2 routes (models, chat/completions)
-│       │   ├── __init__.py
-│       │   ├── router.py       # APIRouter instance, imported by server
-│       │   └── route.py        # Endpoint handlers
-│       ├── gemini/             # 2 routes
-│       │   ├── __init__.py
-│       │   ├── router.py
-│       │   ├── chat.py         # Chat completions + streaming
-│       │   ├── models.py       # Model list
-│       │   └── helpers.py      # Shared utils, response builders
-│       ├── grok/               # 2 routes
-│       │   ├── __init__.py
-│       │   ├── router.py
-│       │   ├── client.py       # GrokClient — grok2api transport integration
-│       │   ├── chat.py         # Chat completions (fake streaming)
-│       │   ├── models.py
-│       │   └── helpers.py
-│       ├── metaai/             # 8 routes
-│       │   ├── __init__.py
-│       │   ├── router.py
-│       │   ├── chat.py         # Chat completions
-│       │   ├── models.py
-│       │   ├── generation.py   # Image + Video generation (media)
-│       │   └── helpers.py
-│       └── notebooklm/         # ~15 routes
-│           ├── __init__.py
-│           ├── router.py
-│           ├── helpers.py       # Client fetch, response builders
-│           ├── models.py        # Model list (1 route)
-│           ├── chat.py          # Chat completions + conversation management (7 routes)
-│           └── artifacts.py     # Media generation + download — audio/video/cinematic (7 routes)
+│       ├── deepseek/           # DeepSeek routes (models, chat/completions)
+│       ├── gemini/             # Gemini routes (models, chat/completions)
+│       ├── profiles/           # Profile management CRUD routes
+│       └── keys/               # API key management routes
 ├── deepseek-api/         # Vendored SDK (git submodule)
 ├── Gemini-API/           # Vendored SDK (git submodule)
-├── grok2api/             # Vendored SDK (git submodule)
-├── notebooklm-py/        # Vendored SDK (git submodule)
-├── metaai-api/           # Vendored SDK (git submodule)
+├── data/                 # Data directory (profiles.json, api_keys.json, sessions.json)
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── CONVERSION.md
+│   ├── auth.md
 │   ├── deepseek.md
+│   └── gemini.md
 │   ├── gemini.md
 │   ├── grok.md
 │   ├── metaai.md

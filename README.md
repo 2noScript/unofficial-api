@@ -2,15 +2,15 @@
 
 > **⚠️ Unofficial & Experimental**
 >
-> This project uses **undocumented, unofficial APIs** from DeepSeek, Google (Gemini), Google (NotebookLM), Meta (Meta AI), and xAI (Grok). These are **not officially supported** by any provider.
+> This project uses **undocumented, unofficial APIs** from DeepSeek and Google (Gemini). These are **not officially supported** by any provider.
 >
 > - APIs can break or change without notice
 > - Rate limits and throttling apply
-> - Credentials (cookies) expire and must be refreshed
+> - Credentials (tokens/cookies) expire and must be refreshed
 > - **Not affiliated** with DeepSeek or Google
 > - For **prototypes, research, and personal projects** only
 
-OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta AI**, and **Grok**.
+OpenAI-compatible REST API for **DeepSeek** and **Gemini** with multi-profile dynamic load balancing.
 
 > 📖 [Architecture Overview](docs/ARCHITECTURE.md) — project structure, lifecycle, client types, streaming, auth, Docker
 >
@@ -20,7 +20,7 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta 
 
 ## Getting Started
 
-1. Pick a provider → follow its credential guide
+1. Pick a provider → create profiles or follow its credential guide
 2. Copy and fill `.env`:
    ```bash
    cp .env.example .env
@@ -32,7 +32,7 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta 
    docker compose up -d      # Docker
    ```
 4. Open Swagger UI: http://localhost:8088/docs
-5. Generate an API key (required for all chat requests):
+5. Generate an API key (required for chat requests if `DISABLE_AUTH=false`):
    ```bash
    curl -X POST http://localhost:8088/v1/keys/generate \
      -H "Content-Type: application/json" \
@@ -44,9 +44,23 @@ OpenAI-compatible REST API for **DeepSeek**, **Gemini**, **NotebookLM**, **Meta 
 |---|---|---|
 | DeepSeek | [`docs/deepseek.md`](docs/deepseek.md) | [reasoning_content](docs/deepseek.md#response--additional-fields) |
 | Gemini | [`docs/gemini.md`](docs/gemini.md) | [Chats, Gems, Deep Research](docs/gemini.md#provider-specific-endpoints) |
-| NotebookLM | [`docs/notebooklm.md`](docs/notebooklm.md) | [Notebooks, Sources, Notes, Chat, Research, Sharing, Settings, Mind Maps](docs/notebooklm.md) · [Artifacts (~32)](docs/notebooklm-artifacts.md) |
-| Meta AI | [`docs/metaai.md`](docs/metaai.md) | [Image Gen, Video Gen, Image Upload, Video Extend, Media](docs/metaai.md#provider-specific-endpoints) |
-| Grok | [`docs/grok.md`](docs/grok.md) | None |
+
+## Profiles & Load Balancing
+
+Credentials are stored and managed via **Profiles** saved in `data/profiles.json` (or configured via API).
+
+- **Multi-Profile Load Balancing**: Chat completion requests automatically load-balance across active profiles (`is_active: true`) using a Round-Robin algorithm.
+- **Session-Profile Sticky Affinity**: When passing `X-Session-Id`, the conversation binds to a specific profile to ensure multi-turn context continuity. If the profile becomes inactive, auto-failover seamlessly routes to another active profile.
+
+### Profiles API (`/v1/profiles`)
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `POST /v1/profiles` | POST | Create a new profile (`deepseek` requires `token`, `gemini` requires `cookie`) |
+| `GET /v1/profiles` | GET | List all profiles (optional query parameter `?type=deepseek` or `?type=gemini`) |
+| `GET /v1/profiles/{id}` | GET | Get profile details by ID |
+| `PUT /v1/profiles/{id}` | PUT | Update profile name, credentials, or `is_active` status |
+| `DELETE /v1/profiles/{id}` | DELETE | Delete a profile by ID |
 
 ## Configuration
 
@@ -56,28 +70,17 @@ cp .env.example .env
 
 | Env var | Required | Description |
 |---|---|---|
-| `DEEPSEEK_AUTH_TOKEN` | ✅ | DeepSeek `authorization` header — [docs](docs/deepseek.md) |
-| `GEMINI_COOKIE` | ✅ | Gemini full cookie string — [docs](docs/gemini.md) |
-| `NOTEBOOKLM_STORAGE_PATH` | ❌* | Path to `storage_state.json` — [docs](docs/notebooklm.md) |
-| `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` | ❌* | Notebook ID for chat completions — [docs](docs/notebooklm.md) |
-| `META_AI_COOKIE` | ✅ | Meta AI full cookie string — [docs](docs/metaai.md) |
-| `GROK_COOKIE`, `GROK_PROXY_USER_AGENT`, `GROK_PROXY_BROWSER` | ✅ | Grok cookies + config — [docs](docs/grok.md) |
+| `UNOFFICIAL_API_DATA_DIR` | ❌ | Directory for `profiles.json`, `api_keys.json`, `sessions.json`, `machine_id`. Default: `data` |
+| `DISABLE_AUTH` | ❌ | Disable API key authentication in development mode (`true`/`false`). Default: `true` |
 | `SESSION_TTL_DAYS` | ❌ | Session lifetime in days after last use. `0` = never expire. Default: `7` |
 | `SESSION_MAX_SESSIONS` | ❌ | Max sessions kept in memory. Default: `5000` |
 | `API_KEY_SECRET` | ❌ | HMAC secret for API key signing. Change in production. |
-| `UNOFFICIAL_API_DATA_DIR` | ❌ | Directory for `api_keys.json`, `sessions.json`, `machine_id`. Default: `~/.unofficial-api` |
-
-
-\*Required for NotebookLM endpoints. `NOTEBOOKLM_DEFAULT_NOTEBOOK_ID` required for chat completions.
 
 ## Run
 
 ### Docker
 
 ```bash
-# Build multi-platform
-docker buildx build --platform linux/amd64,linux/arm64 -t 2noscript/unofficial-api:latest --push .
-
 # Run
 docker compose up -d
 docker compose logs -f
@@ -94,16 +97,16 @@ docker compose down
 
 These share the same format across all providers.
 
-| Endpoint | Method | DeepSeek | Gemini | NotebookLM | Meta AI | Grok |
-|---|---|---|---|---|---|---|
-| `GET /v1/{provider}/models` | GET | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `POST /v1/{provider}/chat/completions` | POST | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Endpoint | Method | DeepSeek | Gemini |
+|---|---|---|---|
+| `GET /v1/{provider}/models` | GET | ✅ | ✅ |
+| `POST /v1/{provider}/chat/completions` | POST | ✅ | ✅ |
 
 ### Request body
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `gemini-3-flash`, `notebooklm-2-0`, `llama-4`, `grok-4.20-auto`) |
+| `model` | string | ✅ | — | Model ID (e.g. `deepseek-v3`, `deepseek-r1`, `gemini-3-flash`, `gemini-3-pro`) |
 | `messages` | array | ✅ | — | `[{"role": "user", "content": "..."}]` |
 | `stream` | bool | ❌ | `false` | Enable SSE streaming |
 
@@ -147,12 +150,9 @@ data: [DONE]
 | `GET /v1/keys` | GET | List all API keys (masked) |
 | `POST /v1/keys/revoke` | POST | Deactivate an API key |
 
-Key management endpoints do **not** require authentication to allow bootstrapping. See [docs/auth.md](docs/auth.md) for full details.
+See [docs/auth.md](docs/auth.md) for full details.
 
 ## Examples
-
-All providers share the same request format — only the endpoint and model differ.
-Replace `YOUR_API_KEY` with a key from `POST /v1/keys/generate`.
 
 ```bash
 # DeepSeek
@@ -167,30 +167,11 @@ curl -s http://localhost:8088/v1/gemini/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hi"}]}'
 
-# Grok
-curl -s http://localhost:8088/v1/grok/chat/completions \
-  -H "Authorization: Bearer <key>" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "grok-4.20-auto", "messages": [{"role": "user", "content": "Hi"}]}'
-
-# Meta AI
-curl -s http://localhost:8088/v1/metaai/chat/completions \
-  -H "Authorization: Bearer <key>" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "llama-4", "messages": [{"role": "user", "content": "Hi"}]}'
-
-# NotebookLM
-curl -s http://localhost:8088/v1/notebooklm/chat/completions \
-  -H "Authorization: Bearer <key>" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "notebooklm-2-0", "messages": [{"role": "user", "content": "Hi"}]}'
-
-# Session persistence (same X-Session-Id keeps multi-turn history per provider)
+# Session persistence with Sticky Profile Affinity
 curl -s http://localhost:8088/v1/gemini/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "X-Session-Id: <session-id-from-previous-response>" \
+  -H "X-Session-Id: my-chat-session-001" \
   -H "Content-Type: application/json" \
   -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "What did I just ask?"}]}'
 ```
 
-> For provider-specific endpoints (gems, research, notebooks, sources, image/video gen), see the respective doc.
