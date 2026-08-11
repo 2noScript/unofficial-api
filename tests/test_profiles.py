@@ -6,6 +6,8 @@ client = TestClient(app)
 AUTH = {"Authorization": "Bearer dev-key"}
 
 
+from core.profile import delete_profile
+
 class TestProfilesAPI:
     def test_create_deepseek_profile_success(self):
         resp = client.post(
@@ -25,6 +27,7 @@ class TestProfilesAPI:
         assert data["cookie"] is None
         assert data["is_active"] is True
         assert data["id"].startswith("prof_deepseek_")
+        delete_profile(data["id"])
 
     def test_create_gemini_profile_success(self):
         resp = client.post(
@@ -43,6 +46,7 @@ class TestProfilesAPI:
         assert data["cookie"] == "__Secure-1PSID=xyz_cookie"
         assert data["token"] is None
         assert data["id"].startswith("prof_gemini_")
+        delete_profile(data["id"])
 
     def test_create_deepseek_missing_token_fails(self):
         resp = client.post(
@@ -96,9 +100,12 @@ class TestProfilesAPI:
         )
         pid = create_resp.json()["id"]
 
-        resp = client.get(f"/v1/profiles/{pid}", headers=AUTH)
-        assert resp.status_code == 200
-        assert resp.json()["id"] == pid
+        try:
+            resp = client.get(f"/v1/profiles/{pid}", headers=AUTH)
+            assert resp.status_code == 200
+            assert resp.json()["id"] == pid
+        finally:
+            delete_profile(pid)
 
     def test_get_nonexistent_profile_404(self):
         resp = client.get("/v1/profiles/prof_nonexistent_9999", headers=AUTH)
@@ -112,16 +119,19 @@ class TestProfilesAPI:
         )
         pid = create_resp.json()["id"]
 
-        update_resp = client.put(
-            f"/v1/profiles/{pid}",
-            json={"name": "New Updated Name", "token": "new_tok", "is_active": False},
-            headers=AUTH
-        )
-        assert update_resp.status_code == 200
-        data = update_resp.json()
-        assert data["name"] == "New Updated Name"
-        assert data["token"] == "new_tok"
-        assert data["is_active"] is False
+        try:
+            update_resp = client.put(
+                f"/v1/profiles/{pid}",
+                json={"name": "New Updated Name", "token": "new_tok", "is_active": False},
+                headers=AUTH
+            )
+            assert update_resp.status_code == 200
+            data = update_resp.json()
+            assert data["name"] == "New Updated Name"
+            assert data["token"] == "new_tok"
+            assert data["is_active"] is False
+        finally:
+            delete_profile(pid)
 
     def test_delete_profile(self):
         create_resp = client.post(

@@ -83,6 +83,8 @@ async def lifespan(app: FastAPI):
 
     if gemini_client:
         await gemini_client.close()
+    from core.gemini_pool import gemini_pool
+    await gemini_pool.close_all()
 
 
 security_bearer = HTTPBearer(auto_error=False)

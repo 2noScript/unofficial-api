@@ -38,6 +38,10 @@ def _has_provider_session(session_data: dict) -> bool:
     return False
 
 
+from core.load_balancer import load_balancer, NoActiveProfileError
+from core.gemini_pool import gemini_pool
+
+
 @router.post(
     "/chat/completions",
     summary="Create a chat completion using Gemini models",
@@ -59,9 +63,19 @@ async def chat_completions(
         }
     ),
 ):
-    client = _require_client(request)
-    if isinstance(client, JSONResponse):
-        return client
+    session_data = getattr(request.state, "session_data", {})
+    try:
+        profile, _ = load_balancer.select_profile("gemini", session_data=session_data)
+        client = await gemini_pool.get_or_create_client(profile)
+    except NoActiveProfileError:
+        client = _require_client(request)
+        if isinstance(client, JSONResponse):
+            return client
+    except Exception as e:
+        return JSONResponse(
+            {"error": {"message": f"Gemini profile error: {str(e)}", "type": "server_error", "code": "upstream_error"}},
+            status_code=500,
+        )
 
     VALID_GEMINI_MODELS = {m.model_name for m in GeminiModel if m is not GeminiModel.UNSPECIFIED}
 

@@ -17,17 +17,23 @@ from core.session.adapters import get_adapter
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
 
+from core.load_balancer import load_balancer, NoActiveProfileError
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["DeepSeek"])
 
 
-def _get_auth() -> str:
-    auth_token = os.environ.get("DEEPSEEK_AUTH_TOKEN")
-    if not auth_token:
-        raise ValueError(
-            "DeepSeek credentials not found. Set DEEPSEEK_AUTH_TOKEN"
-        )
+def _get_auth(session_data: dict | None = None) -> str:
+    try:
+        profile, _ = load_balancer.select_profile("deepseek", session_data=session_data)
+        auth_token = profile.get("token", "")
+    except NoActiveProfileError:
+        auth_token = os.environ.get("DEEPSEEK_AUTH_TOKEN")
+        if not auth_token:
+            raise ValueError(
+                "DeepSeek credentials not found. Create a DeepSeek profile or set DEEPSEEK_AUTH_TOKEN."
+            )
     if not auth_token.startswith("Bearer "):
         auth_token = f"Bearer {auth_token}"
     return auth_token
@@ -63,7 +69,7 @@ def _run_chat(
     session_data: dict,
     adapter,
 ) -> dict:
-    auth_token = _get_auth()
+    auth_token = _get_auth(session_data)
     user_message = extract_text(messages[-1].content) if messages else ""
     history = session_data.get("history", [])
 
@@ -105,7 +111,7 @@ async def _stream_chat_real(
     adapter,
 ) -> AsyncGenerator[str, None]:
     try:
-        auth_token = _get_auth()
+        auth_token = _get_auth(session_data)
         user_message = extract_text(messages[-1].content) if messages else ""
         history = session_data.get("history", [])
         response_id = f"chatcmpl-{int(time.time())}"
