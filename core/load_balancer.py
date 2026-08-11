@@ -87,8 +87,13 @@ class ProfileLoadBalancer:
     def is_retryable_error(err: str | Exception) -> bool:
         """
         Check if an error is an auth, credential expiration, or rate-limit error that warrants failover retry.
+        Note: gemini_webapi status 1016 ('Session is not authenticated or cookies have expired.') is non-fatal
+        for generate_content and must NOT deactivate profiles.
         """
         msg = str(err).lower()
+        if "session is not authenticated" in msg:
+            return False
+
         retryable_keywords = (
             "401", "403", "429", "unauthorized", "unauthenticated",
             "forbidden", "expired", "invalid cookie", "invalid token",

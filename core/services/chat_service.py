@@ -53,7 +53,7 @@ class ChatExecutionService:
             except Exception as e:
                 err_str = str(e)
                 logger.warning("Profile '%s' init failed (%s). Failing over...", profile_id, err_str)
-                if profile_id and load_balancer.is_retryable_error(err_str):
+                if profile_id and strategy.is_retryable_error(err_str):
                     load_balancer.handle_profile_failure(profile_id, session_data)
                     await strategy.handle_profile_cleanup(profile_id)
                 if attempt < max_attempts - 1 and load_balancer.get_active_profiles(provider_name):
@@ -106,7 +106,7 @@ class ChatExecutionService:
                 content, thoughts = await strategy.execute_chat(client, prompt, model, session_kwargs)
             except Exception as e:
                 err_str = str(e)
-                if load_balancer.is_retryable_error(err_str):
+                if strategy.is_retryable_error(err_str):
                     logger.warning("Profile '%s' failed on request (%s). Deactivating profile...", profile_id, err_str)
                     if profile_id:
                         load_balancer.handle_profile_failure(profile_id, session_data)

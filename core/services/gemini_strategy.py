@@ -50,3 +50,10 @@ class GeminiStrategy(BaseProviderStrategy):
     async def handle_profile_cleanup(self, profile_id: str | None) -> None:
         if profile_id and profile_id in gemini_pool._clients:
             del gemini_pool._clients[profile_id]
+
+    def is_retryable_error(self, err: str | Exception) -> bool:
+        msg = str(err).lower()
+        if "session is not authenticated" in msg:
+            return False
+        keywords = ("401", "403", "429", "unauthorized", "invalid cookie", "rate limit", "too many requests", "40300")
+        return any(kw in msg for kw in keywords)

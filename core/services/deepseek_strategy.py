@@ -57,3 +57,8 @@ class DeepSeekStrategy(BaseProviderStrategy):
 
     async def handle_profile_cleanup(self, profile_id: str | None) -> None:
         pass
+
+    def is_retryable_error(self, err: str | Exception) -> bool:
+        msg = str(err).lower()
+        keywords = ("401", "403", "429", "unauthorized", "unauthenticated", "invalid token", "rate limit", "too many requests", "40300")
+        return any(kw in msg for kw in keywords)

@@ -20,6 +20,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 
 interface Profile {
   id: string;
@@ -362,104 +370,112 @@ export function App() {
           )}
         </div>
 
-        {/* Profiles View */}
+        {/* Profiles Table View (shadcn/ui Table) */}
         {activeTab === "profiles" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {profiles.length === 0 ? (
-              <Card className="col-span-2 text-center py-16">
-                <CardContent className="flex flex-col items-center">
-                  <Shield className="w-12 h-12 text-muted-foreground mb-3" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Provider Profiles Table</CardTitle>
+              <CardDescription>Manage credential profiles for DeepSeek and Gemini load balancers</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {profiles.length === 0 ? (
+                <div className="text-center py-12">
+                  <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                   <p className="text-muted-foreground text-sm mb-4">No profiles found.</p>
                   <Button variant="outline" onClick={() => setShowAddProfileModal(true)}>
                     Create Your First Profile
                   </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              profiles.map((p) => (
-                <Card
-                  key={p.id}
-                  className={`transition-all ${!p.is_active && "border-destructive/40 opacity-75"}`}
-                >
-                  <CardHeader className="flex flex-row items-start justify-between pb-3">
-                    <div>
-                      <div className="flex items-center gap-2.5 mb-1">
-                        <Badge variant="secondary">
-                          {p.type}
-                        </Badge>
-                        <CardTitle className="text-base">{p.name}</CardTitle>
-                      </div>
-                      <CardDescription className="font-mono">
-                        ID: {p.id}
-                      </CardDescription>
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleToggleProfileActive(p)}
-                      className={`gap-1.5 text-xs ${
-                        p.is_active
-                          ? "border-emerald-800/40 text-emerald-400 hover:bg-emerald-950/40"
-                          : "border-destructive/40 text-destructive hover:bg-destructive/10"
-                      }`}
-                    >
-                      {p.is_active ? (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Active</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span>Inactive</span>
-                        </>
-                      )}
-                    </Button>
-                  </CardHeader>
-
-                  <CardContent className="space-y-4">
-                    <div className="bg-muted/60 border border-border rounded-xl p-3 text-xs font-mono text-muted-foreground truncate">
-                      <span className="text-foreground mr-2 font-semibold">
-                        {p.type === "deepseek" ? "TOKEN:" : "COOKIE:"}
-                      </span>
-                      {p.type === "deepseek"
-                        ? p.token ? `${p.token.slice(0, 16)}...` : "None"
-                        : p.cookie ? `${p.cookie.slice(0, 24)}...` : "None"}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-border text-xs text-muted-foreground">
-                      <span>Updated: {p.updated_at ? new Date(p.updated_at).toLocaleString() : "N/A"}</span>
-
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setEditingProfile(p);
-                            setEditName(p.name);
-                            setEditCredential("");
-                          }}
-                          title="Edit Profile"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteProfile(p.id)}
-                          className="text-destructive hover:bg-destructive/10"
-                          title="Delete Profile"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[120px]">Type</TableHead>
+                      <TableHead>Profile Info</TableHead>
+                      <TableHead>Credential Preview</TableHead>
+                      <TableHead className="w-[140px]">Status</TableHead>
+                      <TableHead className="w-[180px]">Updated At</TableHead>
+                      <TableHead className="text-right w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {profiles.map((p) => (
+                      <TableRow key={p.id} className={!p.is_active ? "opacity-75" : ""}>
+                        <TableCell>
+                          <Badge variant="secondary" className="uppercase tracking-wider font-bold">
+                            {p.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-foreground">{p.name}</div>
+                          <div className="text-xs font-mono text-muted-foreground">ID: {p.id}</div>
+                        </TableCell>
+                        <TableCell>
+                          <code className="text-xs bg-muted/60 px-2 py-1 rounded border border-border font-mono text-muted-foreground">
+                            {p.type === "deepseek"
+                              ? p.token ? `${p.token.slice(0, 18)}...` : "None"
+                              : p.cookie ? `${p.cookie.slice(0, 24)}...` : "None"}
+                          </code>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggleProfileActive(p)}
+                            className={`gap-1.5 text-xs ${
+                              p.is_active
+                                ? "border-emerald-800/40 text-emerald-400 hover:bg-emerald-950/40"
+                                : "border-destructive/40 text-destructive hover:bg-destructive/10"
+                            }`}
+                          >
+                            {p.is_active ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Active</span>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>Inactive</span>
+                              </>
+                            )}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {p.updated_at ? new Date(p.updated_at).toLocaleString() : "N/A"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingProfile(p);
+                                setEditName(p.name);
+                                setEditCredential("");
+                              }}
+                              title="Edit Profile"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteProfile(p.id)}
+                              className="text-destructive hover:bg-destructive/10"
+                              title="Delete Profile"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* API Keys View */}

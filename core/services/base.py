@@ -40,3 +40,7 @@ class BaseProviderStrategy(ABC):
     async def handle_profile_cleanup(self, profile_id: str | None) -> None:
         """Clean up provider client instance if profile fails."""
         pass
+
+    def is_retryable_error(self, err: str | Exception) -> bool:
+        """Determine if an error for this specific provider is a retryable/fatal auth failure."""
+        return False
