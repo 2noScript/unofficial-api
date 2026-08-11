@@ -5,6 +5,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY deepseek-api/ deepseek-api/
 COPY Gemini-API/ Gemini-API/
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim
