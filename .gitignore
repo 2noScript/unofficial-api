@@ -14,5 +14,6 @@ tests/raw
 log_files
 
 
+temp/
 .DS_Store
 # Vendor git repos (standalone, not submodules)

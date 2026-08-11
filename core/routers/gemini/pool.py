@@ -1,4 +1,3 @@
-import sys
 import logging
 from typing import Optional
 from gemini_webapi import GeminiClient
@@ -14,11 +13,11 @@ class GeminiClientPool:
     async def get_or_create_client(self, profile: dict) -> GeminiClient:
         pid = profile["id"]
         cookie_str = profile.get("cookie", "")
-        secure_1psid = parse_cookie(cookie_str, "__Secure-1PSID")
-        secure_1psidts = parse_cookie(cookie_str, "__Secure-1PSIDTS")
+        secure_1psid = parse_cookie(cookie_str, "__Secure-1PSID") or parse_cookie(cookie_str, "__Secure-3PSID") or parse_cookie(cookie_str, "SID")
+        secure_1psidts = parse_cookie(cookie_str, "__Secure-1PSIDTS") or parse_cookie(cookie_str, "__Secure-3PSIDTS")
 
         if not secure_1psid:
-            raise ValueError(f"Gemini profile '{pid}' has invalid cookie (missing __Secure-1PSID).")
+            raise ValueError(f"Gemini profile '{pid}' has invalid cookie (missing __Secure-1PSID, __Secure-3PSID, or SID).")
 
         # Reuse existing client if initialized
         if pid in self._clients:
@@ -27,11 +26,7 @@ class GeminiClientPool:
         client = GeminiClient(secure_1psid=secure_1psid, secure_1psidts=secure_1psidts)
         try:
             await client.init(timeout=30, auto_close=False)
-            from gemini_webapi.constants import AccountStatus
-            if getattr(client, "account_status", None) == AccountStatus.UNAUTHENTICATED:
-                logger.warning("[GeminiPool] Profile '%s' is UNAUTHENTICATED.", pid)
-                await client.close()
-                raise ValueError(f"Gemini profile '{pid}' cookie is unauthenticated or expired.")
+            logger.info("[GeminiPool] Profile '%s' initialized successfully (status: %s).", pid, getattr(client, "account_status", None))
         except Exception as e:
             logger.error("[GeminiPool] Init failed for profile '%s': %s", pid, e)
             raise
