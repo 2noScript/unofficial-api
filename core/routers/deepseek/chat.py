@@ -1,26 +1,24 @@
 import os
-import json
 import time
 import asyncio
 import logging
-import functools
 from typing import AsyncGenerator
 
-
-from fastapi import APIRouter, Body, Request
+from fastapi import Body, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from deepseek_api import DeepSeek, DEEPSEEK_MODELS, DEEPSEEK_MODEL_CONFIG
+from deepseek_api import DeepSeek, DEEPSEEK_MODEL_CONFIG
 from core.schemas import ChatCompletionRequest, ChatCompletionResponse
 from core.utils import extract_text, make_stream_chunk, make_error_chunk, STREAM_END
 from core.session.adapters import get_adapter
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
-
-
 from core.load_balancer import load_balancer, NoActiveProfileError
+from core.services.chat_service import chat_service
+from core.services.deepseek_strategy import DeepSeekStrategy
+
+from .router import router
 
 logger = logging.getLogger(__name__)
-
-router = APIRouter(tags=["DeepSeek"])
+deepseek_strategy = DeepSeekStrategy()
 
 
 def _get_auth(session_data: dict | None = None) -> str:
@@ -116,20 +114,6 @@ async def _stream_chat_real(
         logger.error("DeepSeek streaming failed: %s", e)
         yield make_error_chunk(str(e))
         yield STREAM_END
-
-
-from core.services.chat_service import chat_service
-from core.services.deepseek_strategy import DeepSeekStrategy
-
-deepseek_strategy = DeepSeekStrategy()
-
-
-@router.get(
-    "/models",
-    summary="List available DeepSeek models",
-)
-async def list_models():
-    return {"object": "list", "data": DEEPSEEK_MODELS}
 
 
 @router.post(
