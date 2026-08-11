@@ -39,23 +39,6 @@ def validate_env():
             errors.append("Gemini: missing __Secure-1PSID. Set GEMINI_COOKIE=\"__Secure-1PSID=...\"")
         # __Secure-1PSIDTS is optional
 
-    if os.environ.get("META_AI_COOKIE"):
-        mc = os.environ.get("META_AI_COOKIE") or ""
-        for key in ["datr", "abra_sess", "ecto_1_sess"]:
-            if not parse_cookie(mc, key):
-                errors.append(f"Meta AI: missing {key}. Set META_AI_COOKIE=\"...; {key}=...\"")
-
-    if os.environ.get("GROK_COOKIE") or os.environ.get("GROK_PROXY_USER_AGENT") or os.environ.get("GROK_PROXY_BROWSER"):
-        if not os.environ.get("GROK_COOKIE"):
-            errors.append("Grok: missing cookie string. Set GROK_COOKIE")
-
-    if os.environ.get("NOTEBOOKLM_STORAGE_PATH") or os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID"):
-        sp = os.environ.get("NOTEBOOKLM_STORAGE_PATH")
-        if sp and not os.path.exists(sp):
-            errors.append(f"NotebookLM: storage path not found: {sp}")
-        if sp and not os.environ.get("NOTEBOOKLM_DEFAULT_NOTEBOOK_ID"):
-            errors.append("NotebookLM: missing default notebook ID. Set NOTEBOOKLM_DEFAULT_NOTEBOOK_ID")
-
     if errors:
         msg = "\n".join(
             ["", "=" * 60, "  ENVIRONMENT VARIABLE ERRORS", "=" * 60]

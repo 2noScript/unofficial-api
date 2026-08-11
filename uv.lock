@@ -470,26 +470,6 @@ wheels = [
 ]
 
 [[package]]
-name = "filelock"
-version = "3.29.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e6/dc/be6cbe99670cd6e4ad387123647cb08e0c32975e223f82551e914c5568a6/filelock-3.29.4.tar.gz", hash = "sha256:10cdb3656fc44541cdf30652a93fb10ec6b05325620eb316bd26893e4201538a", size = 63028, upload-time = "2026-06-13T16:12:00.744Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/37/a065dc3bd6e49423a6532c642ca7378d3f467b1ef44c2800c937af7f9739/filelock-3.29.4-py3-none-any.whl", hash = "sha256:dac1648087d5115554850d113e7dd8c83ab2d38e3435dde2d4f163847e57b767", size = 42757, upload-time = "2026-06-13T16:11:59.582Z" },
-]
-
-[[package]]
-name = "grok-api"
-version = "0.1.0"
-source = { editable = "grok-api" }
-dependencies = [
-    { name = "curl-cffi" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "curl-cffi", specifier = ">=0.7.0" }]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -780,48 +760,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
-
-[[package]]
-name = "notebooklm-py"
-version = "0.8.0"
-source = { editable = "notebooklm-py" }
-dependencies = [
-    { name = "click" },
-    { name = "filelock" },
-    { name = "httpx" },
-    { name = "rich" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.0.0,<9" },
-    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115,<1" },
-    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.14,<4" },
-    { name = "filelock", specifier = ">=3.13,<4" },
-    { name = "httpx", specifier = ">=0.27.0,<0.29" },
-    { name = "markdownify", marker = "extra == 'markdown'", specifier = ">=0.14.1,<2" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0,<3" },
-    { name = "notebooklm-py", extras = ["browser", "dev", "markdown", "mcp", "server"], marker = "extra == 'all'" },
-    { name = "packaging", marker = "extra == 'dev'", specifier = ">=23.0,<27" },
-    { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40.0,<2" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1,<5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0,<10" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0,<2" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0,<8" },
-    { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.30.0,<0.37" },
-    { name = "pytest-rerunfailures", marker = "extra == 'dev'", specifier = ">=14.0,<17" },
-    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.3.0,<3" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.6.0,<4" },
-    { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=1.0.0,<2" },
-    { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.20,<1" },
-    { name = "rich", specifier = ">=13.0.0,<16" },
-    { name = "rookiepy", marker = "extra == 'cookies'", specifier = ">=0.1.0,<1" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.18" },
-    { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0.0,<3" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.34,<1" },
-    { name = "vcrpy", marker = "extra == 'dev'", specifier = ">=6.0.0,<9" },
-]
-provides-extras = ["markdown", "browser", "cookies", "mcp", "server", "dev", "all"]
 
 [[package]]
 name = "orjson"
@@ -1399,10 +1337,8 @@ dependencies = [
     { name = "curl-cffi" },
     { name = "deepseek-api" },
     { name = "fastapi", extra = ["standard"] },
-    { name = "grok-api" },
     { name = "loguru" },
     { name = "lxml-html-clean" },
-    { name = "notebooklm-py" },
     { name = "orjson" },
     { name = "python-multipart" },
     { name = "requests" },
@@ -1423,10 +1359,8 @@ requires-dist = [
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "deepseek-api", editable = "deepseek-api" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.138.0" },
-    { name = "grok-api", editable = "grok-api" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "lxml-html-clean", specifier = ">=0.1.1" },
-    { name = "notebooklm-py", editable = "notebooklm-py" },
     { name = "orjson", specifier = ">=3.11.7" },
     { name = "python-multipart", specifier = ">=0.0.21" },
     { name = "requests", specifier = ">=2.34.2" },
