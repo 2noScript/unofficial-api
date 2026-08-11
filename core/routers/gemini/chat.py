@@ -57,8 +57,9 @@ async def _resolve_gemini_client(request: Request, session_data: dict) -> tuple[
                 return None, None, client
             return client, None, None
         except Exception as e:
-            logger.warning("Gemini profile '%s' init failed (%s). Failing over...", profile_id, e)
-            if profile_id:
+            err_str = str(e)
+            logger.warning("Gemini profile '%s' init failed (%s). Failing over...", profile_id, err_str)
+            if profile_id and load_balancer.is_retryable_error(err_str):
                 load_balancer.handle_profile_failure(profile_id, session_data)
                 if profile_id in gemini_pool._clients:
                     del gemini_pool._clients[profile_id]
@@ -172,7 +173,7 @@ async def _stream_gemini(
                     first = False
         except Exception as e:
             err_str = str(e)
-            if load_balancer.is_retryable_error(err_str) or "unauthenticated" in err_str.lower():
+            if load_balancer.is_retryable_error(err_str):
                 if profile_id:
                     load_balancer.handle_profile_failure(profile_id, session_data)
 

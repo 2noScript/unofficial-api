@@ -83,7 +83,7 @@ export function App() {
       const res = await fetch("/v1/profiles");
       if (res.ok) {
         const data = await res.json();
-        setProfiles(data.data || []);
+        setProfiles(data.profiles || data.data || []);
       }
     } catch (e) {
       console.error(e);
@@ -95,7 +95,7 @@ export function App() {
       const res = await fetch("/v1/keys");
       if (res.ok) {
         const data = await res.json();
-        setKeys(data.data || []);
+        setKeys(data.keys || data.data || []);
       }
     } catch (e) {
       console.error(e);
