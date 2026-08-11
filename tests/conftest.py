@@ -33,7 +33,7 @@ SESSION_STORE: dict[str, dict] = {}
 @asynccontextmanager
 async def noop_lifespan(app: FastAPI):
     yield
-    from core.gemini_pool import gemini_pool
+    from core.routers.gemini.pool import gemini_pool
     await gemini_pool.close_all()
 
 

@@ -39,7 +39,7 @@ def _has_provider_session(session_data: dict) -> bool:
 
 
 from core.load_balancer import load_balancer, NoActiveProfileError
-from core.gemini_pool import gemini_pool
+from .pool import gemini_pool
 
 
 @router.post(

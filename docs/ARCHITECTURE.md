@@ -21,11 +21,10 @@ unofficial-api/
 │   ├── server.py              # FastAPI app, lifespan, router registration
 │   ├── profile.py             # Profile storage (profiles.json) & CRUD
 │   ├── load_balancer.py       # Multi-profile Round-Robin load balancer & session affinity
-│   ├── gemini_pool.py         # Async connection pool for Gemini clients
 │   ├── schemas.py             # Shared Pydantic models
 │   └── routers/
 │       ├── deepseek/           # DeepSeek routes (models, chat/completions)
-│       ├── gemini/             # Gemini routes (models, chat/completions)
+│       ├── gemini/             # Gemini routes + connection pool (pool.py)
 │       ├── profiles/           # Profile management CRUD routes
 │       └── keys/               # API key management routes
 ├── deepseek-api/         # Vendored SDK (git submodule)
