@@ -124,9 +124,21 @@ def health():
     }
 
 
-@app.get("/", include_in_schema=False)
-def root():
-    return RedirectResponse(url="/docs")
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+WEB_DIST = Path(BASE) / ".." / "web" / "dist"
+if WEB_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(WEB_DIST / "assets")), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    @app.get("/ui", include_in_schema=False)
+    def serve_ui():
+        return FileResponse(str(WEB_DIST / "index.html"))
+else:
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse(url="/docs")
 
 
 if __name__ == "__main__":
