@@ -34,8 +34,13 @@ class ProfileResponse(BaseModel):
     token: str | None = Field(default=None, description="Auth token if deepseek profile")
     cookie: str | None = Field(default=None, description="Cookie string if gemini profile")
     is_active: bool = Field(..., description="Active status")
+    total_requests: int = Field(default=0, description="Total requests processed by profile")
+    request_counts: dict[str, dict[str, int]] = Field(
+        default_factory=dict, description="Request counts grouped by date (YYYY-MM-DD) and hour (HH)"
+    )
     created_at: str = Field(..., description="Creation date ISO string")
     updated_at: str = Field(..., description="Last updated date ISO string")
+
 
 
 class ProfileListResponse(BaseModel):

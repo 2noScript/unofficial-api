@@ -148,3 +148,39 @@ class TestProfilesAPI:
         # Verify 404 after deletion
         get_resp = client.get(f"/v1/profiles/{pid}", headers=AUTH)
         assert get_resp.status_code == 404
+
+    def test_record_profile_request_and_stats(self):
+        from datetime import datetime
+        from core.profile import record_profile_request
+
+        create_resp = client.post(
+            "/v1/profiles",
+            json={"type": "deepseek", "name": "Stats Test", "token": "tok_stats"},
+            headers=AUTH
+        )
+        pid = create_resp.json()["id"]
+
+        try:
+            fixed_dt = datetime(2026, 8, 13, 14, 30, 0)
+            updated = record_profile_request(pid, timestamp=fixed_dt)
+            assert updated is not None
+            assert updated["total_requests"] == 1
+            assert updated["request_counts"]["2026-08-13"]["14"] == 1
+
+            # Record a second request in the same hour
+            record_profile_request(pid, timestamp=fixed_dt)
+
+            # Record a third request in another hour
+            another_dt = datetime(2026, 8, 13, 15, 10, 0)
+            record_profile_request(pid, timestamp=another_dt)
+
+            # Query API to verify stats
+            resp = client.get(f"/v1/profiles/{pid}", headers=AUTH)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["total_requests"] == 3
+            assert data["request_counts"]["2026-08-13"]["14"] == 2
+            assert data["request_counts"]["2026-08-13"]["15"] == 1
+        finally:
+            delete_profile(pid)
+

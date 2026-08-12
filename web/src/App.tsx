@@ -36,6 +36,8 @@ interface Profile {
   token?: string | null;
   cookie?: string | null;
   is_active: boolean;
+  total_requests?: number;
+  request_counts?: Record<string, Record<string, number>>;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +78,9 @@ export function App() {
 
   // Confirm Delete Profile Modal State
   const [deletingProfile, setDeletingProfile] = useState<Profile | null>(null);
+
+  // View Profile Stats Modal State
+  const [viewStatsProfile, setViewStatsProfile] = useState<Profile | null>(null);
 
   // New Key Modal State
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
@@ -402,10 +407,11 @@ export function App() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[120px]">Type</TableHead>
+                      <TableHead className="w-[110px]">Type</TableHead>
                       <TableHead>Profile Info</TableHead>
-                      <TableHead className="w-[160px]">Active Status</TableHead>
-                      <TableHead className="w-[180px]">Updated At</TableHead>
+                      <TableHead className="w-[140px]">Requests</TableHead>
+                      <TableHead className="w-[140px]">Active Status</TableHead>
+                      <TableHead className="w-[160px]">Updated At</TableHead>
                       <TableHead className="text-right w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -420,6 +426,22 @@ export function App() {
                         <TableCell>
                           <div className="font-semibold text-foreground">{p.name}</div>
                           <div className="text-xs font-mono text-muted-foreground">ID: {p.id}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-sm font-semibold text-foreground">
+                              {p.total_requests || 0}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setViewStatsProfile(p)}
+                              className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              title="View Hourly Request Statistics"
+                            >
+                              <Activity className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -507,6 +529,63 @@ export function App() {
           </Card>
         )}
       </main>
+
+      {/* View Request Statistics Modal */}
+      {viewStatsProfile && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="max-w-lg w-full max-h-[85vh] flex flex-col p-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/40">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-primary" />
+                  Thống kê Request
+                </CardTitle>
+                <CardDescription className="text-xs font-mono mt-0.5">{viewStatsProfile.name} ({viewStatsProfile.id})</CardDescription>
+              </div>
+              <Badge variant="secondary" className="font-mono text-xs px-2.5 py-1">
+                Tổng: {viewStatsProfile.total_requests || 0}
+              </Badge>
+            </CardHeader>
+            <CardContent className="overflow-y-auto space-y-4 pt-4 flex-1">
+              {(!viewStatsProfile.request_counts || Object.keys(viewStatsProfile.request_counts).length === 0) ? (
+                <div className="text-center py-8">
+                  <Activity className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
+                  <p className="text-sm text-muted-foreground">Chưa có dữ liệu request cho profile này.</p>
+                </div>
+              ) : (
+                Object.entries(viewStatsProfile.request_counts)
+                  .sort(([d1], [d2]) => d2.localeCompare(d1))
+                  .map(([date, hours]) => {
+                    const dayTotal = Object.values(hours).reduce((a, b) => a + b, 0);
+                    return (
+                      <div key={date} className="border border-border/80 rounded-xl p-3 bg-muted/20 space-y-2">
+                        <div className="flex items-center justify-between font-semibold text-xs text-foreground border-b border-border/40 pb-2">
+                          <span>📅 Ngày {date}</span>
+                          <Badge variant="outline" className="text-[11px] font-mono">Lượt gọi ngày: {dayTotal}</Badge>
+                        </div>
+                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                          {Object.entries(hours)
+                            .sort(([h1], [h2]) => h1.localeCompare(h2))
+                            .map(([hour, count]) => (
+                              <div key={hour} className="bg-background border border-border/60 rounded-lg p-2 text-center shadow-xs">
+                                <div className="text-[10px] text-muted-foreground font-mono">{hour}:00</div>
+                                <div className="text-sm font-bold text-primary">{count}</div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </CardContent>
+            <div className="flex justify-end pt-3 pb-1 px-4 border-t border-border/40">
+              <Button variant="outline" size="sm" onClick={() => setViewStatsProfile(null)}>
+                Đóng
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Confirm Delete Profile Modal */}
       {deletingProfile && (

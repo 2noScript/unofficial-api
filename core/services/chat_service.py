@@ -8,6 +8,7 @@ from gemini_webapi import ChatSession
 
 from core.services.base import BaseProviderStrategy
 from core.load_balancer import load_balancer, NoActiveProfileError
+from core.profile import record_profile_request
 from core.utils import extract_text, make_stream_chunk, make_error_chunk, STREAM_END
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
@@ -87,6 +88,9 @@ class ChatExecutionService:
                 {"error": {"message": "Client not initialized.", "type": "server_error", "code": "upstream_error"}},
                 status_code=500,
             )
+
+        if profile_id:
+            record_profile_request(profile_id)
 
         provider_name = strategy.provider_name
         raw_prompt = extract_text(messages[-1].get("content") if isinstance(messages[-1], dict) else messages[-1].content) if messages else ""
@@ -176,6 +180,9 @@ class ChatExecutionService:
                 {"error": {"message": "Client not initialized.", "type": "server_error", "code": "upstream_error"}},
                 status_code=500,
             )
+
+        if profile_id:
+            record_profile_request(profile_id)
 
         provider_name = strategy.provider_name
         raw_prompt = extract_text(messages[-1].get("content") if isinstance(messages[-1], dict) else messages[-1].content) if messages else ""
