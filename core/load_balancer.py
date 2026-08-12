@@ -89,16 +89,19 @@ class ProfileLoadBalancer:
         Note: gemini_webapi status 1016 ('Session is not authenticated or cookies have expired.') is non-fatal
         for generate_content and must NOT deactivate profiles.
         """
+        import re
         msg = str(err).lower()
         if "session is not authenticated" in msg:
             return False
 
-        retryable_keywords = (
-            "401", "403", "429", "unauthorized", "unauthenticated",
-            "forbidden", "expired", "invalid cookie", "invalid token",
-            "rate limit", "too many requests", "40300"
+        text_keywords = (
+            "unauthorized", "unauthenticated", "forbidden", "expired",
+            "invalid cookie", "invalid token", "rate limit", "too many requests"
         )
-        return any(kw in msg for kw in retryable_keywords)
+        if any(kw in msg for kw in text_keywords):
+            return True
+
+        return bool(re.search(r'\b(401|403|429|40300)\b', msg))
 
 
 load_balancer = ProfileLoadBalancer()
