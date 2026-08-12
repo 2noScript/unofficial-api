@@ -69,15 +69,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_origin_regex=".*",
-)
-
 session_middleware = VirtualSessionMiddleware(
     store=session_store,
     manager=session_manager,
@@ -86,6 +77,15 @@ session_middleware = VirtualSessionMiddleware(
     extract_provider_fn=_extract_provider
 )
 app.add_middleware(BaseHTTPMiddleware, dispatch=session_middleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_origin_regex=".*",
+)
 
 app.include_router(deepseek_router, prefix="/v1/deepseek")
 app.include_router(gemini_router, prefix="/v1/gemini")
