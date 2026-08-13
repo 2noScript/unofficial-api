@@ -73,5 +73,46 @@ def make_error_chunk(error_msg: str, error_type: str = "server_error", code: str
 STREAM_END = "data: [DONE]\n\n"
 
 
+def safe_read_json(file_path: Any, default: Any = None, retries: int = 3, delay: float = 0.01) -> Any:
+    """Read JSON file with retry mechanism to prevent transient lock/read race conditions."""
+    if default is None:
+        default = {}
+    if not file_path.exists():
+        return default
+
+    for attempt in range(retries):
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            if not content.strip():
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                    continue
+                return default
+            return json.loads(content)
+        except (json.JSONDecodeError, OSError):
+            if attempt < retries - 1:
+                time.sleep(delay)
+                continue
+            return default
+    return default
+
+
+def atomic_write_json(file_path: Any, data: Any) -> None:
+    """Atomically write JSON data to file using a temporary file and atomic os.replace."""
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_file = file_path.with_suffix(f".tmp_{time.time_ns()}")
+    try:
+        tmp_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp_file, file_path)
+    except Exception as e:
+        if tmp_file.exists():
+            try:
+                tmp_file.unlink()
+            except OSError:
+                pass
+        raise e
+
+
+
 
 

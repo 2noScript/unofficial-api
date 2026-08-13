@@ -7,6 +7,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from core.utils import safe_read_json, atomic_write_json
+
 logger = logging.getLogger(__name__)
 
 _profiles_lock = threading.RLock()
@@ -25,20 +27,16 @@ def _ensure_data_dir():
 def _load_profiles_data() -> dict:
     _ensure_data_dir()
     profiles_file = _get_profiles_file()
-    if profiles_file.exists():
-        try:
-            return json.loads(profiles_file.read_text())
-        except Exception as e:
-            logger.error("Failed to read profiles file: %s", e)
-    return {"profiles": {}}
+    data = safe_read_json(profiles_file, default={"profiles": {}})
+    if not isinstance(data, dict) or "profiles" not in data:
+        return {"profiles": {}}
+    return data
 
 
 def _save_profiles_data(data: dict):
     _ensure_data_dir()
     profiles_file = _get_profiles_file()
-    tmp_file = profiles_file.with_suffix(".json.tmp")
-    tmp_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    os.replace(tmp_file, profiles_file)
+    atomic_write_json(profiles_file, data)
 
 
 def _normalize_profile_stats(profile: dict) -> dict:

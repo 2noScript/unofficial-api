@@ -5,6 +5,7 @@ import threading
 import logging
 from pathlib import Path
 from dataclasses import dataclass
+from core.utils import safe_read_json, atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,9 @@ class VirtualSessionStore:
         """Load sessions from disk, discarding any that have already expired."""
         try:
             sessions_file = _get_sessions_file()
-            if not sessions_file.exists():
+            raw = safe_read_json(sessions_file, default={})
+            if not isinstance(raw, dict):
                 return
-            raw = json.loads(sessions_file.read_text())
             now = time.time()
             loaded = 0
             for vid, rec in raw.get('sessions', {}).items():
@@ -67,7 +68,6 @@ class VirtualSessionStore:
                 k: v for k, v in raw.get('assistant_cache', {}).items()
                 if v in self._sessions
             }
-            sessions_file = _get_sessions_file()
             logger.info('Loaded %d sessions from disk (%s), TTL=%.1f days', loaded, sessions_file, _ttl_days if _ttl_days > 0 else float('inf'))
         except Exception as e:
             logger.warning('Failed to load sessions from disk: %s', e)
@@ -89,7 +89,7 @@ class VirtualSessionStore:
                     },
                     'assistant_cache': dict(self._assistant_cache),
                 }
-            sessions_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+            atomic_write_json(sessions_file, payload)
         except Exception as e:
             logger.warning('Failed to save sessions to disk: %s', e)
 
