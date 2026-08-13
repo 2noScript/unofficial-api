@@ -81,7 +81,7 @@ class DeepSeekStrategy(BaseProviderStrategy):
     def is_retryable_error(self, err: str | Exception) -> bool:
         import re
         msg = str(err).lower()
-        text_keywords = ("unauthorized", "unauthenticated", "invalid token", "rate limit", "too many requests")
+        text_keywords = ("unauthorized", "unauthenticated", "invalid token", "token expired", "expired token")
         if any(kw in msg for kw in text_keywords):
             return True
-        return bool(re.search(r'\b(401|403|429|40300)\b', msg))
+        return bool(re.search(r'\b401\b', msg))
