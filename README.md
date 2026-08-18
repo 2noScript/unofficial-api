@@ -67,7 +67,7 @@ Credentials are stored and managed via **Profiles** saved in `data/profiles.json
 
 | Env var | Required | Description |
 |---|---|---|
-| `UNOFFICIAL_API_DATA_DIR` | ❌ | Directory for `profiles.json`, `api_keys.json`, `sessions.json`. Default: `data` |
+| `UNOFFICIAL_API_DATA_DIR` | ❌ | Directory for `unofficial_api.db` (SQLite) & legacy JSON files. Default: `data` |
 | `DISABLE_AUTH` | ❌ | Disable API key authentication in development mode (`true`/`false`). Default: `true` |
 | `SESSION_TTL_DAYS` | ❌ | Session lifetime in days after last use. `0` = never expire. Default: `7` |
 | `SESSION_MAX_SESSIONS` | ❌ | Max sessions kept in memory. Default: `5000` |

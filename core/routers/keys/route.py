@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from core.session import generate_api_key, list_api_keys, revoke_api_key
-from core.session.api_key import _load_keys
+from core.session import generate_api_key, list_api_keys, revoke_api_key, get_api_key
 
 router = APIRouter(tags=["API Keys"])
 
@@ -33,14 +32,15 @@ class KeyListResponse(BaseModel):
 def generate_key(body: KeyGenerateRequest):
     try:
         api_key = generate_api_key(body.name)
-        data = _load_keys()
-        name = data.get("keys", {}).get(api_key, {}).get("name", body.name)
+        key_info = get_api_key(api_key)
+        name = key_info["name"] if key_info else body.name
         return KeyGenerateResponse(api_key=api_key, name=name)
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate API key: {str(e)}"
         )
+
 
 @router.get("", response_model=KeyListResponse, summary="List all API keys")
 def list_keys():

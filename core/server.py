@@ -37,10 +37,18 @@ def _extract_provider(path: str) -> str:
     return 'unknown'
 
 
+from core.db import init_db, auto_migrate_from_json
+
+# Ensure SQLite schema and migration on startup
+auto_migrate_from_json()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    auto_migrate_from_json()
     yield
     await gemini_pool.close_all()
+
+
 
 
 security_bearer = HTTPBearer(auto_error=False)

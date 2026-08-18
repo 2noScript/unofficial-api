@@ -6,8 +6,7 @@ import secrets
 import logging
 import time
 import threading
-from pathlib import Path
-from core.utils import safe_read_json, atomic_write_json
+from core.db import get_db_connection, init_db, get_data_dir
 
 logger = logging.getLogger(__name__)
 _keys_lock = threading.RLock()
@@ -15,76 +14,71 @@ _keys_lock = threading.RLock()
 API_KEY_PREFIX = 'sk'
 API_KEY_SECRET = os.environ.get('API_KEY_SECRET', 'unofficial-api-key-secret')
 
-def _get_data_dir() -> Path:
-    return Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
-
-def _get_keys_file() -> Path:
-    return _get_data_dir() / 'api_keys.json'
-
-def _ensure_data_dir():
-    _get_data_dir().mkdir(parents=True, exist_ok=True)
 
 def _get_machine_id() -> str:
-    _ensure_data_dir()
-    mid_file = _get_data_dir() / 'machine_id'
-    if mid_file.exists():
+    init_db()
+    with _keys_lock, get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM system_settings WHERE key = 'machine_id'")
+        row = cur.fetchone()
+        if row and row["value"]:
+            return row["value"]
+
+        # Check fallback file in data dir
+        mid_file = get_data_dir() / 'machine_id'
+        if mid_file.exists():
+            try:
+                mid_text = mid_file.read_text().strip()
+                if mid_text:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('machine_id', ?)",
+                        (mid_text,)
+                    )
+                    return mid_text
+            except Exception:
+                pass
+
+        # Generate new machine ID
+        raw = f"{secrets.token_hex(16)}-{time.time()}"
+        machine_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
+        conn.execute(
+            "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('machine_id', ?)",
+            (machine_id,)
+        )
         try:
-            return mid_file.read_text().strip()
+            mid_file.write_text(machine_id)
         except Exception:
             pass
-    
-    raw = f"{secrets.token_hex(16)}-{time.time()}"
-    machine_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
-    try:
-        mid_file.write_text(machine_id)
-    except Exception:
-        pass
-    return machine_id
+        return machine_id
 
-def _load_keys() -> dict:
-    _ensure_data_dir()
-    keys_file = _get_keys_file()
-    default_data = {
-        "keys": {},
-        "machine_id": _get_machine_id(),
-        "last_used": {}
-    }
-    data = safe_read_json(keys_file, default=default_data)
-    if not isinstance(data, dict):
-        data = default_data
-    if "machine_id" not in data or not data["machine_id"]:
-        data["machine_id"] = _get_machine_id()
-    if "keys" not in data or not isinstance(data["keys"], dict):
-        data["keys"] = {}
-    if "last_used" not in data or not isinstance(data["last_used"], dict):
-        data["last_used"] = {}
-    return data
-
-def _save_keys(data: dict):
-    _ensure_data_dir()
-    atomic_write_json(_get_keys_file(), data)
 
 def generate_api_key(name: str = '') -> str:
-    with _keys_lock:
-        data = _load_keys()
-        machine_id = data['machine_id']
+    init_db()
+    with _keys_lock, get_db_connection() as conn:
+        machine_id = _get_machine_id()
         key_id = secrets.token_hex(3)
         raw = f"{machine_id[:8]}{key_id}"
         crc = hmac.new(API_KEY_SECRET.encode(), raw.encode(), 'sha256').hexdigest()[:8]
         api_key = f"{API_KEY_PREFIX}-{machine_id[:8]}-{key_id}-{crc}"
-        
+
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) AS cnt FROM api_keys")
+        count = cur.fetchone()["cnt"]
+
         if not name:
-            name = f"Key {len(data['keys']) + 1}"
-            
+            name = f"Key {count + 1}"
+
         created_at = time.strftime('%Y-%m-%dT%H:%M:%S')
-        data['keys'][api_key] = {
-            'name': name,
-            'created_at': created_at,
-            'is_active': True
-        }
-        _save_keys(data)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO api_keys (key, name, is_active, created_at, last_used)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (api_key, name, 1, created_at, '')
+        )
         logger.info("Generated API key: %s...", api_key[:20])
         return api_key
+
 
 def validate_api_key(api_key: str) -> bool:
     try:
@@ -98,18 +92,20 @@ def validate_api_key(api_key: str) -> bool:
             logger.debug('Invalid API key prefix: %s', prefix)
             return False
 
-        with _keys_lock:
-            data = _load_keys()
-            if api_key not in data.get('keys', {}):
+        init_db()
+        with _keys_lock, get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT key, name, is_active FROM api_keys WHERE key = ?", (api_key,))
+            row = cur.fetchone()
+            if not row:
                 logger.debug('API key not found in store')
                 return False
 
-            key_entry = data['keys'][api_key]
-            if not key_entry.get('is_active', True):
+            if not row["is_active"]:
                 logger.debug('API key is deactivated')
                 return False
 
-            machine_id = data['machine_id']
+            machine_id = _get_machine_id()
             if len(parts) == 4:
                 _, mid, key_id, crc = parts
                 raw = f"{machine_id[:8]}{key_id}"
@@ -117,10 +113,10 @@ def validate_api_key(api_key: str) -> bool:
                 if crc != expected_crc:
                     logger.debug('API key CRC mismatch')
                     return False
-                    
+
             try:
-                data.setdefault('last_used', {})[api_key] = time.strftime('%Y-%m-%dT%H:%M:%S')
-                _save_keys(data)
+                now = time.strftime('%Y-%m-%dT%H:%M:%S')
+                conn.execute("UPDATE api_keys SET last_used = ? WHERE key = ?", (now, api_key))
             except Exception as se:
                 logger.warning('Failed to save API key last_used: %s', se)
             return True
@@ -128,29 +124,52 @@ def validate_api_key(api_key: str) -> bool:
         logger.error('API key validation error: %s', e)
         return False
 
+
 def list_api_keys() -> list[dict]:
-    with _keys_lock:
-        data = _load_keys()
+    init_db()
+    with _keys_lock, get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT key, name, is_active, created_at, last_used FROM api_keys")
         result = []
-        for key, info in data.get('keys', {}).items():
+        for row in cur.fetchall():
             result.append({
-                'key': key,
-                'name': info.get('name', ''),
-                'created_at': info.get('created_at', ''),
-                'is_active': info.get('is_active', True),
-                'last_used': data.get('last_used', {}).get(key, '')
+                'key': row['key'],
+                'name': row['name'],
+                'created_at': row['created_at'],
+                'is_active': bool(row['is_active']),
+                'last_used': row['last_used'] or ''
             })
         return result
 
+
+def get_api_key(api_key: str) -> dict | None:
+    init_db()
+    with _keys_lock, get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT key, name, is_active, created_at, last_used FROM api_keys WHERE key = ?", (api_key,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {
+            'key': row['key'],
+            'name': row['name'],
+            'created_at': row['created_at'],
+            'is_active': bool(row['is_active']),
+            'last_used': row['last_used'] or ''
+        }
+
+
 def revoke_api_key(api_key: str) -> bool:
-    with _keys_lock:
-        data = _load_keys()
-        if api_key not in data.get('keys', {}):
+
+    init_db()
+    with _keys_lock, get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT key FROM api_keys WHERE key = ?", (api_key,))
+        if not cur.fetchone():
             return False
-        data['keys'][api_key]['is_active'] = False
-        _save_keys(data)
+        conn.execute("UPDATE api_keys SET is_active = 0 WHERE key = ?", (api_key,))
         return True
+
 
 def get_api_key_hash(api_key: str) -> str:
     return hashlib.sha256(api_key.encode()).hexdigest()[:16]
-

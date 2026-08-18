@@ -29,7 +29,7 @@ unofficial-api/
 │       └── keys/               # API key management routes
 ├── deepseek-api/         # Vendored SDK (git submodule)
 ├── Gemini-API/           # Vendored SDK (git submodule)
-├── data/                 # Data directory (profiles.json, api_keys.json, sessions.json)
+├── data/                 # Data directory (unofficial_api.db SQLite database & legacy files)
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── CONVERSION.md

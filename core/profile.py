@@ -5,38 +5,11 @@ import time
 import logging
 import threading
 from datetime import datetime
-from pathlib import Path
-
-from core.utils import safe_read_json, atomic_write_json
+from core.db import get_db_connection, init_db
 
 logger = logging.getLogger(__name__)
 
 _profiles_lock = threading.RLock()
-
-def _get_data_dir() -> Path:
-    return Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
-
-def _get_profiles_file() -> Path:
-    return _get_data_dir() / 'profiles.json'
-
-
-def _ensure_data_dir():
-    _get_data_dir().mkdir(parents=True, exist_ok=True)
-
-
-def _load_profiles_data() -> dict:
-    _ensure_data_dir()
-    profiles_file = _get_profiles_file()
-    data = safe_read_json(profiles_file, default={"profiles": {}})
-    if not isinstance(data, dict) or "profiles" not in data:
-        return {"profiles": {}}
-    return data
-
-
-def _save_profiles_data(data: dict):
-    _ensure_data_dir()
-    profiles_file = _get_profiles_file()
-    atomic_write_json(profiles_file, data)
 
 
 def _normalize_profile_stats(profile: dict) -> dict:
@@ -47,6 +20,27 @@ def _normalize_profile_stats(profile: dict) -> dict:
     return profile
 
 
+def _row_to_profile(row) -> dict:
+    try:
+        req_counts = json.loads(row["request_counts"]) if row["request_counts"] else {}
+    except Exception:
+        req_counts = {}
+
+    profile = {
+        "id": row["id"],
+        "type": row["type"],
+        "name": row["name"],
+        "token": row["token"],
+        "cookie": row["cookie"],
+        "is_active": bool(row["is_active"]),
+        "total_requests": int(row["total_requests"] or 0),
+        "request_counts": req_counts,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+    return _normalize_profile_stats(profile)
+
+
 def create_profile(
     profile_type: str,
     name: str,
@@ -54,8 +48,8 @@ def create_profile(
     cookie: str | None = None,
     is_active: bool = True
 ) -> dict:
-    with _profiles_lock:
-        data = _load_profiles_data()
+    init_db()
+    with _profiles_lock, get_db_connection() as conn:
         profile_id = f"prof_{profile_type}_{uuid.uuid4().hex[:8]}"
         now = time.strftime('%Y-%m-%dT%H:%M:%S')
 
@@ -72,29 +66,48 @@ def create_profile(
             "updated_at": now
         }
 
-        data["profiles"][profile_id] = profile_entry
-        _save_profiles_data(data)
+        conn.execute(
+            """
+            INSERT INTO profiles (id, type, name, token, cookie, is_active, total_requests, request_counts, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                profile_id,
+                profile_type,
+                profile_entry["name"],
+                profile_entry["token"],
+                profile_entry["cookie"],
+                1 if is_active else 0,
+                0,
+                json.dumps({}),
+                now,
+                now
+            )
+        )
         logger.info("Created profile: %s (%s)", profile_id, name)
         return profile_entry
 
 
 def list_profiles(profile_type: str | None = None) -> list[dict]:
-    with _profiles_lock:
-        data = _load_profiles_data()
-        result = []
-        for pid, profile in data.get("profiles", {}).items():
-            if profile_type and profile.get("type") != profile_type:
-                continue
-            result.append(_normalize_profile_stats(profile))
-        return result
+    init_db()
+    with _profiles_lock, get_db_connection() as conn:
+        cur = conn.cursor()
+        if profile_type:
+            cur.execute("SELECT * FROM profiles WHERE type = ?", (profile_type,))
+        else:
+            cur.execute("SELECT * FROM profiles")
+        
+        return [_row_to_profile(row) for row in cur.fetchall()]
 
 
 def get_profile(profile_id: str) -> dict | None:
-    with _profiles_lock:
-        data = _load_profiles_data()
-        profile = data.get("profiles", {}).get(profile_id)
-        if profile:
-            return _normalize_profile_stats(profile)
+    init_db()
+    with _profiles_lock, get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM profiles WHERE id = ?", (profile_id,))
+        row = cur.fetchone()
+        if row:
+            return _row_to_profile(row)
         return None
 
 
@@ -105,39 +118,50 @@ def update_profile(
     cookie: str | None = None,
     is_active: bool | None = None
 ) -> dict | None:
-    with _profiles_lock:
-        data = _load_profiles_data()
-        if profile_id not in data.get("profiles", {}):
+    init_db()
+    with _profiles_lock, get_db_connection() as conn:
+        profile = get_profile(profile_id)
+        if not profile:
             return None
 
-        profile = data["profiles"][profile_id]
         ptype = profile.get("type")
-
-        if name is not None:
-            profile["name"] = name
-        if is_active is not None:
-            profile["is_active"] = is_active
-
+        new_name = name if name is not None else profile["name"]
+        new_is_active = is_active if is_active is not None else profile["is_active"]
+        
+        new_token = profile["token"]
+        new_cookie = profile["cookie"]
         if ptype == "deepseek" and token is not None:
-            profile["token"] = token
+            new_token = token
         elif ptype == "gemini" and cookie is not None:
-            profile["cookie"] = cookie
+            new_cookie = cookie
 
-        profile["updated_at"] = time.strftime('%Y-%m-%dT%H:%M:%S')
-        data["profiles"][profile_id] = profile
-        _save_profiles_data(data)
+        now = time.strftime('%Y-%m-%dT%H:%M:%S')
+
+        conn.execute(
+            """
+            UPDATE profiles SET
+                name = ?,
+                token = ?,
+                cookie = ?,
+                is_active = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (new_name, new_token, new_cookie, 1 if new_is_active else 0, now, profile_id)
+        )
         logger.info("Updated profile: %s", profile_id)
-        return _normalize_profile_stats(profile)
+        return get_profile(profile_id)
 
 
 def delete_profile(profile_id: str) -> bool:
-    with _profiles_lock:
-        data = _load_profiles_data()
-        if profile_id not in data.get("profiles", {}):
+    init_db()
+    with _profiles_lock, get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM profiles WHERE id = ?", (profile_id,))
+        if not cur.fetchone():
             return False
 
-        del data["profiles"][profile_id]
-        _save_profiles_data(data)
+        conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
         logger.info("Deleted profile: %s", profile_id)
         return True
 
@@ -150,34 +174,40 @@ def deactivate_profile(profile_id: str) -> dict | None:
 
 def record_profile_request(profile_id: str, timestamp: datetime | None = None) -> dict | None:
     """Increment request count for profile grouped by YYYY-MM-DD and HH."""
-    with _profiles_lock:
-        data = _load_profiles_data()
-        if profile_id not in data.get("profiles", {}):
+    init_db()
+    with _profiles_lock, get_db_connection() as conn:
+        profile = get_profile(profile_id)
+        if not profile:
             return None
 
-        profile = data["profiles"][profile_id]
         dt = timestamp if timestamp is not None else datetime.now()
-
         day_key = dt.strftime("%Y-%m-%d")
         hour_key = dt.strftime("%H")
 
-        if "request_counts" not in profile or not isinstance(profile["request_counts"], dict):
-            profile["request_counts"] = {}
+        request_counts = profile.get("request_counts", {})
+        if not isinstance(request_counts, dict):
+            request_counts = {}
 
-        if day_key not in profile["request_counts"]:
-            profile["request_counts"][day_key] = {}
+        if day_key not in request_counts:
+            request_counts[day_key] = {}
 
-        current_count = profile["request_counts"][day_key].get(hour_key, 0)
-        profile["request_counts"][day_key][hour_key] = current_count + 1
-        profile["total_requests"] = profile.get("total_requests", 0) + 1
+        current_count = request_counts[day_key].get(hour_key, 0)
+        request_counts[day_key][hour_key] = current_count + 1
+        total_requests = profile.get("total_requests", 0) + 1
+        now = time.strftime('%Y-%m-%dT%H:%M:%S')
 
-        profile["updated_at"] = time.strftime('%Y-%m-%dT%H:%M:%S')
-        data["profiles"][profile_id] = profile
-        _save_profiles_data(data)
+        conn.execute(
+            """
+            UPDATE profiles SET
+                total_requests = ?,
+                request_counts = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (total_requests, json.dumps(request_counts), now, profile_id)
+        )
         logger.info(
             "Recorded request for profile %s (%s %s:00 total=%d count=%d)",
-            profile_id, day_key, hour_key, profile["total_requests"], profile["request_counts"][day_key][hour_key]
+            profile_id, day_key, hour_key, total_requests, request_counts[day_key][hour_key]
         )
-        return _normalize_profile_stats(profile)
-
-
+        return get_profile(profile_id)

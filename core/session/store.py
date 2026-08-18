@@ -3,9 +3,8 @@ import json
 import time
 import threading
 import logging
-from pathlib import Path
 from dataclasses import dataclass
-from core.utils import safe_read_json, atomic_write_json
+from core.db import get_db_connection, init_db
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +15,6 @@ MAX_ASSISTANT = 10000
 TTL_S = _ttl_days * 86400 if _ttl_days > 0 else float('inf')
 TTL_MS = TTL_S * 1000 if _ttl_days > 0 else float('inf')
 CLEANUP_INTERVAL_S = 3600  # every hour
-
-def _get_data_dir() -> Path:
-    return Path(os.environ.get('UNOFFICIAL_API_DATA_DIR', 'data'))
-
-def _get_sessions_file() -> Path:
-    return _get_data_dir() / 'sessions.json'
 
 
 @dataclass
@@ -34,147 +27,223 @@ class SessionRecord:
 
 class VirtualSessionStore:
     def __init__(self):
-        self._sessions = {}
-        self._assistant_cache = {}
-        self._lock = threading.Lock()
-        self._load_from_disk()
+        init_db()
+        self._lock = threading.RLock()
         self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         self._cleanup_thread.start()
-
-    # ── persistence ──────────────────────────────────────────────────────────
-
-    def _load_from_disk(self):
-        """Load sessions from disk, discarding any that have already expired."""
-        try:
-            sessions_file = _get_sessions_file()
-            raw = safe_read_json(sessions_file, default={})
-            if not isinstance(raw, dict):
-                return
-            now = time.time()
-            loaded = 0
-            for vid, rec in raw.get('sessions', {}).items():
-                last_used = rec.get('last_used', 0)
-                if TTL_S != float('inf') and (now - last_used) > TTL_S:
-                    continue  # expired — skip
-                self._sessions[vid] = SessionRecord(
-                    session_id=vid,
-                    data=rec.get('data', {}),
-                    last_used=last_used,
-                    api_key_hash=rec.get('api_key_hash'),
-                )
-                loaded += 1
-            # only keep assistant_cache entries whose vid survived the TTL filter
-            self._assistant_cache = {
-                k: v for k, v in raw.get('assistant_cache', {}).items()
-                if v in self._sessions
-            }
-            logger.info('Loaded %d sessions from disk (%s), TTL=%.1f days', loaded, sessions_file, _ttl_days if _ttl_days > 0 else float('inf'))
-        except Exception as e:
-            logger.warning('Failed to load sessions from disk: %s', e)
-
-    def _save_to_disk(self):
-        """Persist current (already-cleaned) in-memory state to disk."""
-        try:
-            _get_data_dir().mkdir(parents=True, exist_ok=True)
-            sessions_file = _get_sessions_file()
-            with self._lock:
-                payload = {
-                    'sessions': {
-                        vid: {
-                            'data': rec.data,
-                            'last_used': rec.last_used,
-                            'api_key_hash': rec.api_key_hash,
-                        }
-                        for vid, rec in self._sessions.items()
-                    },
-                    'assistant_cache': dict(self._assistant_cache),
-                }
-            atomic_write_json(sessions_file, payload)
-        except Exception as e:
-            logger.warning('Failed to save sessions to disk: %s', e)
 
     # ── public API ────────────────────────────────────────────────────────────
 
     def get_or_create(self, vid: str, api_key_hash: str | None = None) -> SessionRecord:
-        with self._lock:
-            if vid in self._sessions:
-                rec = self._sessions[vid]
-                rec.last_used = time.time()
-                return rec
+        with self._lock, get_db_connection() as conn:
+            now = time.time()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT session_id, data, last_used, api_key_hash FROM sessions WHERE session_id = ?",
+                (vid,)
+            )
+            row = cur.fetchone()
+            if row:
+                try:
+                    data = json.loads(row["data"]) if row["data"] else {}
+                except Exception:
+                    data = {}
+                # Update last_used
+                conn.execute("UPDATE sessions SET last_used = ? WHERE session_id = ?", (now, vid))
+                return SessionRecord(
+                    session_id=vid,
+                    data=data,
+                    last_used=now,
+                    api_key_hash=row["api_key_hash"] or api_key_hash
+                )
 
+            # Not found -> create new
             rec = SessionRecord(
                 session_id=vid,
                 data={},
-                last_used=time.time(),
+                last_used=now,
                 api_key_hash=api_key_hash
             )
+            conn.execute(
+                """
+                INSERT INTO sessions (session_id, data, last_used, api_key_hash, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (vid, json.dumps({}), now, api_key_hash, now)
+            )
             self._evict_lru()
-            self._sessions[vid] = rec
             return rec
-
-    def update(self, vid: str, **fields):
-        with self._lock:
-            rec = self._sessions.get(vid)
-            if not rec:
-                return
-            rec.last_used = time.time()
-            rec.data.update(fields)
-        self._save_to_disk()
 
     def get(self, vid: str) -> SessionRecord | None:
-        with self._lock:
-            rec = self._sessions.get(vid)
-            if rec:
-                rec.last_used = time.time()
-            return rec
+        with self._lock, get_db_connection() as conn:
+            now = time.time()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT session_id, data, last_used, api_key_hash FROM sessions WHERE session_id = ?",
+                (vid,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            try:
+                data = json.loads(row["data"]) if row["data"] else {}
+            except Exception:
+                data = {}
+            conn.execute("UPDATE sessions SET last_used = ? WHERE session_id = ?", (now, vid))
+            return SessionRecord(
+                session_id=vid,
+                data=data,
+                last_used=now,
+                api_key_hash=row["api_key_hash"]
+            )
+
+    def save(self, record: SessionRecord):
+        """Save a SessionRecord directly to SQLite."""
+        self.save_data(record.session_id, record.data, api_key_hash=record.api_key_hash)
+
+    def save_data(self, vid: str, data: dict, api_key_hash: str | None = None):
+        """Persist session data dictionary to SQLite."""
+        with self._lock, get_db_connection() as conn:
+            now = time.time()
+            data_json = json.dumps(data, ensure_ascii=False)
+            if api_key_hash is not None:
+                conn.execute(
+                    """
+                    INSERT INTO sessions (session_id, data, last_used, api_key_hash, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        data = excluded.data,
+                        last_used = excluded.last_used,
+                        api_key_hash = COALESCE(excluded.api_key_hash, sessions.api_key_hash)
+                    """,
+                    (vid, data_json, now, api_key_hash, now)
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO sessions (session_id, data, last_used, api_key_hash, created_at)
+                    VALUES (?, ?, ?, NULL, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        data = excluded.data,
+                        last_used = excluded.last_used
+                    """,
+                    (vid, data_json, now, now)
+                )
+
+    def update(self, vid: str, **fields):
+        with self._lock, get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT data, api_key_hash FROM sessions WHERE session_id = ?", (vid,))
+            row = cur.fetchone()
+            if not row:
+                return
+            try:
+                data = json.loads(row["data"]) if row["data"] else {}
+            except Exception:
+                data = {}
+            data.update(fields)
+            now = time.time()
+            conn.execute(
+                "UPDATE sessions SET data = ?, last_used = ? WHERE session_id = ?",
+                (json.dumps(data, ensure_ascii=False), now, vid)
+            )
 
     def set_assistant(self, hash_key: str, vid: str):
-        with self._lock:
-            if len(self._assistant_cache) >= MAX_ASSISTANT:
-                oldest = next(iter(self._assistant_cache))
-                del self._assistant_cache[oldest]
-            self._assistant_cache[hash_key] = vid
+        with self._lock, get_db_connection() as conn:
+            now = time.time()
+            conn.execute(
+                """
+                INSERT INTO assistant_cache (hash_key, session_id, last_used)
+                VALUES (?, ?, ?)
+                ON CONFLICT(hash_key) DO UPDATE SET
+                    session_id = excluded.session_id,
+                    last_used = excluded.last_used
+                """,
+                (hash_key, vid, now)
+            )
+            # Evict LRU from assistant_cache if over cap
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) AS cnt FROM assistant_cache")
+            count = cur.fetchone()["cnt"]
+            if count > MAX_ASSISTANT:
+                excess = count - MAX_ASSISTANT
+                conn.execute(
+                    """
+                    DELETE FROM assistant_cache WHERE hash_key IN (
+                        SELECT hash_key FROM assistant_cache ORDER BY last_used ASC LIMIT ?
+                    )
+                    """,
+                    (excess,)
+                )
 
     def get_assistant(self, hash_key: str) -> str | None:
-        with self._lock:
-            return self._assistant_cache.get(hash_key)
+        with self._lock, get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT session_id FROM assistant_cache WHERE hash_key = ?", (hash_key,))
+            row = cur.fetchone()
+            if row:
+                now = time.time()
+                conn.execute("UPDATE assistant_cache SET last_used = ? WHERE hash_key = ?", (now, hash_key))
+                return row["session_id"]
+            return None
 
     def get_sessions_by_api_key(self, api_key_hash: str) -> list[SessionRecord]:
-        with self._lock:
-            return [rec for rec in self._sessions.values() if rec.api_key_hash == api_key_hash]
+        with self._lock, get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT session_id, data, last_used, api_key_hash FROM sessions WHERE api_key_hash = ?",
+                (api_key_hash,)
+            )
+            results = []
+            for row in cur.fetchall():
+                try:
+                    data = json.loads(row["data"]) if row["data"] else {}
+                except Exception:
+                    data = {}
+                results.append(SessionRecord(
+                    session_id=row["session_id"],
+                    data=data,
+                    last_used=row["last_used"],
+                    api_key_hash=row["api_key_hash"]
+                ))
+            return results
 
     def delete_expired(self):
         if TTL_S == float('inf'):
             return  # never expire mode
         now = time.time()
-        with self._lock:
-            expired = [
-                vid for vid, rec in self._sessions.items()
-                if (now - rec.last_used) > TTL_S
-            ]
-            for vid in expired:
-                del self._sessions[vid]
-
-            assistant_expired = [
-                h for h, vid in self._assistant_cache.items()
-                if vid not in self._sessions
-            ]
-            for h in assistant_expired:
-                del self._assistant_cache[h]
-
-            if expired or assistant_expired:
-                logger.debug('Expired %d sessions, %d assistant cache entries', len(expired), len(assistant_expired))
-
-        if expired or assistant_expired:
-            self._save_to_disk()
+        with self._lock, get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM sessions WHERE (? - last_used) > ?",
+                (now, TTL_S)
+            )
+            expired_count = cur.fetchone()["cnt"]
+            if expired_count > 0:
+                conn.execute("DELETE FROM sessions WHERE (? - last_used) > ?", (now, TTL_S))
+                # clean dangling assistant_cache entries
+                conn.execute("""
+                    DELETE FROM assistant_cache WHERE session_id NOT IN (SELECT session_id FROM sessions)
+                """)
+                logger.debug('Expired %d sessions from SQLite', expired_count)
 
     # ── internals ─────────────────────────────────────────────────────────────
 
     def _evict_lru(self):
-        if len(self._sessions) < MAX_SESSIONS:
-            return
-        oldest = min(self._sessions.items(), key=lambda x: x[1].last_used)
-        del self._sessions[oldest[0]]
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) AS cnt FROM sessions")
+            count = cur.fetchone()["cnt"]
+            if count > MAX_SESSIONS:
+                excess = count - MAX_SESSIONS
+                conn.execute(
+                    """
+                    DELETE FROM sessions WHERE session_id IN (
+                        SELECT session_id FROM sessions ORDER BY last_used ASC LIMIT ?
+                    )
+                    """,
+                    (excess,)
+                )
 
     def _cleanup_loop(self):
         while True:

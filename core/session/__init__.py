@@ -5,8 +5,10 @@ from .api_key import (
     validate_api_key,
     list_api_keys,
     revoke_api_key,
+    get_api_key,
     get_api_key_hash,
 )
+
 from .middleware import VirtualSessionMiddleware
 from .adapters import get_adapter, list_adapters
 
