@@ -18,14 +18,14 @@ class DeepSeekStrategy(BaseProviderStrategy):
             raise ValueError("DeepSeek profile has no valid token.")
         if not auth_token.startswith("Bearer "):
             auth_token = f"Bearer {auth_token}"
-        return DeepSeek(auth_token)
+        return await asyncio.to_thread(DeepSeek, auth_token)
 
     async def execute_chat(
         self, client: Any, prompt: str, model: str, session_kwargs: dict
     ) -> tuple[str, str]:
-        chat = client.new_session(**session_kwargs)
+        chat = await asyncio.to_thread(client.new_session, **session_kwargs)
         session_kwargs["chat"] = chat
-        result = chat.send_message(prompt, model=model)
+        result = await asyncio.to_thread(chat.send_message, prompt, model=model)
 
         if not result.get("ok"):
             err_msg = result.get("content", "Unknown error")
@@ -41,10 +41,11 @@ class DeepSeekStrategy(BaseProviderStrategy):
     async def execute_stream(
         self, client: Any, prompt: str, model: str, session_kwargs: dict
     ) -> AsyncGenerator[str, None]:
-        chat = client.new_session(**session_kwargs)
+        chat = await asyncio.to_thread(client.new_session, **session_kwargs)
         session_kwargs["chat"] = chat
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
+
 
         def run_stream() -> dict:
             try:

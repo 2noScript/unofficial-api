@@ -1,4 +1,5 @@
 import time
+import asyncio
 import logging
 from typing import Any, AsyncGenerator
 
@@ -13,6 +14,7 @@ from core.utils import extract_text, make_stream_chunk, make_error_chunk, STREAM
 from core.session.history import sync_and_get_history, append_assistant_message, format_prompt_with_history
 
 logger = logging.getLogger(__name__)
+
 
 
 class ChatExecutionService:
@@ -90,9 +92,10 @@ class ChatExecutionService:
             )
 
         if profile_id:
-            record_profile_request(profile_id)
+            asyncio.create_task(asyncio.to_thread(record_profile_request, profile_id))
 
         provider_name = strategy.provider_name
+
         raw_prompt = extract_text(messages[-1].get("content") if isinstance(messages[-1], dict) else messages[-1].content) if messages else ""
         sync_and_get_history(messages, session_data)
         history = session_data.get("history", [])
@@ -182,7 +185,7 @@ class ChatExecutionService:
             )
 
         if profile_id:
-            record_profile_request(profile_id)
+            asyncio.create_task(asyncio.to_thread(record_profile_request, profile_id))
 
         provider_name = strategy.provider_name
         raw_prompt = extract_text(messages[-1].get("content") if isinstance(messages[-1], dict) else messages[-1].content) if messages else ""
@@ -190,6 +193,7 @@ class ChatExecutionService:
         history = session_data.get("history", [])
 
         async def stream_generator():
+
             response_id = f"chatcmpl-{int(time.time())}"
             has_session = cls._has_provider_session(provider_name, session_data)
             prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)

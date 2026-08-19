@@ -1,3 +1,4 @@
+import asyncio
 from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -53,7 +54,7 @@ class ProfileDeleteResponse(BaseModel):
 
 
 @router.post("", response_model=ProfileResponse, status_code=status.HTTP_201_CREATED, summary="Create a new profile")
-def create_new_profile(body: ProfileCreateRequest):
+async def create_new_profile(body: ProfileCreateRequest):
     if body.type == "deepseek" and not body.token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -66,7 +67,8 @@ def create_new_profile(body: ProfileCreateRequest):
         )
 
     try:
-        profile = create_profile(
+        profile = await asyncio.to_thread(
+            create_profile,
             profile_type=body.type,
             name=body.name,
             token=body.token,
@@ -82,9 +84,9 @@ def create_new_profile(body: ProfileCreateRequest):
 
 
 @router.get("", response_model=ProfileListResponse, summary="List all profiles")
-def get_profiles(type: Literal["deepseek", "gemini"] | None = Query(None, description="Filter profiles by type")):
+async def get_profiles(type: Literal["deepseek", "gemini"] | None = Query(None, description="Filter profiles by type")):
     try:
-        profiles = list_profiles(profile_type=type)
+        profiles = await asyncio.to_thread(list_profiles, profile_type=type)
         return ProfileListResponse(profiles=profiles)
     except Exception as e:
         raise HTTPException(
@@ -94,8 +96,8 @@ def get_profiles(type: Literal["deepseek", "gemini"] | None = Query(None, descri
 
 
 @router.get("/{profile_id}", response_model=ProfileResponse, summary="Get profile by ID")
-def get_profile_by_id(profile_id: str):
-    profile = get_profile(profile_id)
+async def get_profile_by_id(profile_id: str):
+    profile = await asyncio.to_thread(get_profile, profile_id)
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -105,8 +107,8 @@ def get_profile_by_id(profile_id: str):
 
 
 @router.put("/{profile_id}", response_model=ProfileResponse, summary="Update profile by ID")
-def update_profile_by_id(profile_id: str, body: ProfileUpdateRequest):
-    existing = get_profile(profile_id)
+async def update_profile_by_id(profile_id: str, body: ProfileUpdateRequest):
+    existing = await asyncio.to_thread(get_profile, profile_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -114,7 +116,8 @@ def update_profile_by_id(profile_id: str, body: ProfileUpdateRequest):
         )
 
     try:
-        updated = update_profile(
+        updated = await asyncio.to_thread(
+            update_profile,
             profile_id=profile_id,
             name=body.name,
             token=body.token,
@@ -137,13 +140,14 @@ def update_profile_by_id(profile_id: str, body: ProfileUpdateRequest):
 
 
 @router.delete("/{profile_id}", response_model=ProfileDeleteResponse, summary="Delete profile by ID")
-def delete_profile_by_id(profile_id: str):
-    deleted = delete_profile(profile_id)
+async def delete_profile_by_id(profile_id: str):
+    deleted = await asyncio.to_thread(delete_profile, profile_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Profile with ID '{profile_id}' not found."
         )
     return ProfileDeleteResponse(status="deleted", id=profile_id)
+
 
 

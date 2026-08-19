@@ -103,7 +103,7 @@ app.include_router(profiles_router, prefix="/v1/profiles")
 
 
 @app.get("/health", summary="Health check", tags=["System"])
-def health():
+async def health():
     ds_active = len(load_balancer.get_active_profiles("deepseek"))
     gem_active = len(load_balancer.get_active_profiles("gemini"))
     return {
@@ -119,12 +119,13 @@ if WEB_DIST.exists():
 
     @app.get("/", include_in_schema=False)
     @app.get("/ui", include_in_schema=False)
-    def serve_ui():
+    async def serve_ui():
         return FileResponse(str(WEB_DIST / "index.html"))
 else:
     @app.get("/", include_in_schema=False)
-    def root():
+    async def root():
         return RedirectResponse(url="/docs")
+
 
 
 if __name__ == "__main__":

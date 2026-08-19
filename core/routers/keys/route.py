@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from core.session import generate_api_key, list_api_keys, revoke_api_key, get_api_key
@@ -29,10 +30,10 @@ class KeyListResponse(BaseModel):
     keys: list[KeyInfo]
 
 @router.post("/generate", response_model=KeyGenerateResponse, summary="Generate a new API key")
-def generate_key(body: KeyGenerateRequest):
+async def generate_key(body: KeyGenerateRequest):
     try:
-        api_key = generate_api_key(body.name)
-        key_info = get_api_key(api_key)
+        api_key = await asyncio.to_thread(generate_api_key, body.name)
+        key_info = await asyncio.to_thread(get_api_key, api_key)
         name = key_info["name"] if key_info else body.name
         return KeyGenerateResponse(api_key=api_key, name=name)
     except Exception as e:
@@ -43,9 +44,9 @@ def generate_key(body: KeyGenerateRequest):
 
 
 @router.get("", response_model=KeyListResponse, summary="List all API keys")
-def list_keys():
+async def list_keys():
     try:
-        keys = list_api_keys()
+        keys = await asyncio.to_thread(list_api_keys)
         return KeyListResponse(keys=keys)
     except Exception as e:
         raise HTTPException(
@@ -54,9 +55,9 @@ def list_keys():
         )
 
 @router.post("/revoke", response_model=KeyRevokeResponse, summary="Revoke (deactivate) an API key")
-def revoke_key(body: KeyRevokeRequest):
+async def revoke_key(body: KeyRevokeRequest):
     try:
-        success = revoke_api_key(body.api_key)
+        success = await asyncio.to_thread(revoke_api_key, body.api_key)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -70,3 +71,4 @@ def revoke_key(body: KeyRevokeRequest):
             status_code=500,
             detail=f"Failed to revoke API key: {str(e)}"
         )
+
