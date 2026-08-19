@@ -145,3 +145,5 @@ def delete_profile_by_id(profile_id: str):
             detail=f"Profile with ID '{profile_id}' not found."
         )
     return ProfileDeleteResponse(status="deleted", id=profile_id)
+
+

@@ -11,8 +11,15 @@ import {
   Zap,
   Globe,
   Database,
-  AlertTriangle
+  AlertTriangle,
+  Play,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Sparkles,
+  Clock
 } from "lucide-react";
+
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +49,16 @@ interface Profile {
   updated_at: string;
 }
 
+interface TestResult {
+  status: "ok" | "error";
+  profile_id: string;
+  type: string;
+  model: string;
+  latency_ms: number;
+  reply?: string | null;
+  error?: string | null;
+}
+
 interface ApiKey {
   id: string;
   name: string;
@@ -55,6 +72,7 @@ interface HealthInfo {
   deepseek_active_profiles: number;
   gemini_active_profiles: number;
 }
+
 
 export function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -86,6 +104,15 @@ export function App() {
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+
+  // Profile Test State
+  const [testingProfileId, setTestingProfileId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
+  const [testModalProfile, setTestModalProfile] = useState<Profile | null>(null);
+  const [testModalPrompt, setTestModalPrompt] = useState("Hello! Introduce yourself in one short sentence.");
+  const [testModalLoading, setTestModalLoading] = useState(false);
+  const [testModalResult, setTestModalResult] = useState<TestResult | null>(null);
+
 
   const fetchHealth = async () => {
     try {
@@ -224,7 +251,81 @@ export function App() {
     }
   };
 
+  const handleTestProfile = async (profile: Profile, customMessage?: string) => {
+    setTestingProfileId(profile.id);
+    const startT = Date.now();
+    const defaultModel = profile.type === "deepseek" ? "deepseek-chat" : "gemini-2.5-flash";
+    const promptText = customMessage || "Hello! Reply with 'OK' if you can read this.";
+
+    try {
+      const res = await fetch(`/v1/${profile.type}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer dev-key",
+          "X-Session-Id": `test-${profile.id}-${Date.now()}`
+        },
+        body: JSON.stringify({
+          model: defaultModel,
+          messages: [{ role: "user", content: promptText }],
+          stream: false
+        }),
+      });
+
+      const elapsed = Date.now() - startT;
+
+      if (res.ok) {
+        const data = await res.json();
+        const replyText = data.choices?.[0]?.message?.content || "OK (No content returned)";
+        const successResult: TestResult = {
+          status: "ok",
+          profile_id: profile.id,
+          type: profile.type,
+          model: defaultModel,
+          latency_ms: elapsed,
+          reply: replyText
+        };
+        setTestResults((prev) => ({ ...prev, [profile.id]: successResult }));
+        return successResult;
+      } else {
+        let errMessage = `HTTP ${res.status}: ${res.statusText}`;
+        try {
+          const errData = await res.json();
+          errMessage = errData.error?.message || errData.detail || errMessage;
+        } catch {
+          // ignore json parse error
+        }
+        const failResult: TestResult = {
+          status: "error",
+          profile_id: profile.id,
+          type: profile.type,
+          model: defaultModel,
+          latency_ms: elapsed,
+          error: errMessage
+        };
+        setTestResults((prev) => ({ ...prev, [profile.id]: failResult }));
+        return failResult;
+      }
+    } catch (e: any) {
+      const elapsed = Date.now() - startT;
+      const networkErrorResult: TestResult = {
+        status: "error",
+        profile_id: profile.id,
+        type: profile.type,
+        model: defaultModel,
+        latency_ms: elapsed,
+        error: e?.message || "Network request failed"
+      };
+      setTestResults((prev) => ({ ...prev, [profile.id]: networkErrorResult }));
+      return networkErrorResult;
+    } finally {
+      setTestingProfileId(null);
+    }
+  };
+
+
   const handleCreateKey = async (e: React.FormEvent) => {
+
     e.preventDefault();
     try {
       const res = await fetch("/v1/keys", {
@@ -409,8 +510,9 @@ export function App() {
                     <TableRow>
                       <TableHead className="w-[110px]">Type</TableHead>
                       <TableHead>Profile Info</TableHead>
-                      <TableHead className="w-[140px]">Requests</TableHead>
-                      <TableHead className="w-[140px]">Active Status</TableHead>
+                      <TableHead className="w-[120px]">Requests</TableHead>
+                      <TableHead className="w-[130px]">Active Status</TableHead>
+                      <TableHead className="w-[170px]">Test Connection</TableHead>
                       <TableHead className="w-[160px]">Updated At</TableHead>
                       <TableHead className="text-right w-[100px]">Actions</TableHead>
                     </TableRow>
@@ -454,6 +556,54 @@ export function App() {
                             </span>
                           </div>
                         </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={testingProfileId === p.id}
+                              onClick={() => handleTestProfile(p)}
+                              className="h-7 px-2.5 text-xs gap-1.5 font-medium border-border hover:bg-primary/10 hover:text-primary transition-all"
+                              title="Send a quick test message to this profile"
+                            >
+                              {testingProfileId === p.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                              ) : (
+                                <Play className="w-3 h-3 text-primary fill-primary/20" />
+                              )}
+                              <span>{testingProfileId === p.id ? "Testing..." : "Test"}</span>
+                            </Button>
+
+                            {testResults[p.id] && (
+                              <button
+                                onClick={() => {
+                                  setTestModalProfile(p);
+                                  setTestModalResult(testResults[p.id]);
+                                }}
+                                className="cursor-pointer group flex items-center"
+                                title="Click to view full test response details"
+                              >
+                                {testResults[p.id].status === "ok" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 gap-1 text-[11px] py-0.5 px-2 font-mono group-hover:border-emerald-500/50 transition-colors"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    <span>{testResults[p.id].latency_ms}ms</span>
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-destructive/10 text-destructive border-destructive/20 gap-1 text-[11px] py-0.5 px-2 font-mono group-hover:border-destructive/50 transition-colors"
+                                  >
+                                    <XCircle className="w-3 h-3 text-destructive" />
+                                    <span>Failed</span>
+                                  </Badge>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {p.updated_at ? new Date(p.updated_at).toLocaleString() : "N/A"}
                         </TableCell>
@@ -486,6 +636,7 @@ export function App() {
                       </TableRow>
                     ))}
                   </TableBody>
+
                 </Table>
               )}
             </CardContent>
@@ -796,8 +947,105 @@ export function App() {
           </Card>
         </div>
       )}
+      {/* Test Profile Modal */}
+      {testModalProfile && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card className="max-w-xl w-full p-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  <span>Test Profile: {testModalProfile.name}</span>
+                </CardTitle>
+                <CardDescription className="flex items-center gap-2 mt-1">
+                  <Badge variant="secondary" className="uppercase font-bold text-[10px]">
+                    {testModalProfile.type}
+                  </Badge>
+                  <span className="text-xs font-mono text-muted-foreground">ID: {testModalProfile.id}</span>
+                  <span className="text-xs text-muted-foreground">• Default Model: {testModalProfile.type === "deepseek" ? "deepseek-chat" : "gemini-2.5-flash"}</span>
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Test Prompt Message
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    value={testModalPrompt}
+                    onChange={(e) => setTestModalPrompt(e.target.value)}
+                    placeholder="Enter test prompt..."
+                    className="text-sm font-sans"
+                  />
+                  <Button
+                    disabled={testModalLoading}
+                    onClick={async () => {
+                      setTestModalLoading(true);
+                      const res = await handleTestProfile(testModalProfile, testModalPrompt);
+                      setTestModalResult(res);
+                      setTestModalLoading(false);
+                    }}
+                    className="gap-1.5 shrink-0"
+                  >
+                    {testModalLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4 fill-current" />
+                    )}
+                    <span>Run Test</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Response Output Box */}
+              {testModalResult && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-muted-foreground">Response Output:</span>
+                    <div className="flex items-center gap-2 font-mono">
+                      {testModalResult.status === "ok" ? (
+                        <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> 200 OK
+                        </span>
+                      ) : (
+                        <span className="text-destructive flex items-center gap-1 font-medium">
+                          <XCircle className="w-3.5 h-3.5" /> Error
+                        </span>
+                      )}
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {testModalResult.latency_ms}ms
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={`p-3.5 rounded-xl border text-xs font-mono overflow-auto max-h-56 select-text ${
+                    testModalResult.status === "ok" 
+                      ? "bg-muted/50 border-border text-foreground"
+                      : "bg-destructive/10 border-destructive/20 text-destructive"
+                  }`}>
+                    {testModalResult.status === "ok" ? (
+                      <p className="whitespace-pre-wrap leading-relaxed">{testModalResult.reply || "No text returned."}</p>
+                    ) : (
+                      <p className="whitespace-pre-wrap leading-relaxed font-semibold">{testModalResult.error || "Unknown error"}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2">
+                <Button variant="ghost" onClick={() => setTestModalProfile(null)}>
+                  Close
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
 
 export default App;
+
