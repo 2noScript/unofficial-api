@@ -72,15 +72,30 @@ class ProfileLoadBalancer:
     def handle_profile_failure(
         self,
         profile_id: str,
-        session_data: dict | None = None
+        session_data: dict | None = None,
+        is_permanent: bool = True
     ) -> None:
         """
-        Deactivate a failing profile and clear sticky affinity from session_data.
+        Handle a failing profile. If is_permanent is True, deactivate profile in DB.
+        Always clear sticky affinity from session_data so the next attempt will use another profile.
         """
-        deactivate_profile(profile_id)
+        if is_permanent:
+            deactivate_profile(profile_id)
         if session_data is not None and session_data.get("profile_id") == profile_id:
             logger.info("Clearing sticky profile_id '%s' from session due to failure", profile_id)
             session_data.pop("profile_id", None)
+
+    @staticmethod
+    def is_auth_failure(err: str | Exception) -> bool:
+        """Check if an error is a permanent credential/auth failure."""
+        import re
+        msg = str(err).lower()
+        if "session is not authenticated" in msg:
+            return False
+        auth_keywords = ("unauthorized", "unauthenticated", "invalid cookie", "invalid token", "expired token", "token expired")
+        if any(kw in msg for kw in auth_keywords):
+            return True
+        return bool(re.search(r'\b(401|403|40300)\b', msg))
 
     @staticmethod
     def is_retryable_error(err: str | Exception) -> bool:
@@ -105,4 +120,5 @@ class ProfileLoadBalancer:
 
 
 load_balancer = ProfileLoadBalancer()
+
 

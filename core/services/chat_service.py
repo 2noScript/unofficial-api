@@ -59,7 +59,8 @@ class ChatExecutionService:
                 err_str = str(e)
                 logger.warning("Profile '%s' init failed (%s). Failing over...", profile_id, err_str)
                 if profile_id and strategy.is_retryable_error(err_str):
-                    load_balancer.handle_profile_failure(profile_id, session_data)
+                    is_auth = load_balancer.is_auth_failure(err_str)
+                    load_balancer.handle_profile_failure(profile_id, session_data, is_permanent=is_auth)
                     await strategy.handle_profile_cleanup(profile_id)
                 if attempt < max_attempts - 1 and load_balancer.get_active_profiles(provider_name):
                     continue
@@ -84,85 +85,103 @@ class ChatExecutionService:
         adapter,
     ) -> JSONResponse:
         """Execute non-streaming chat with session resilience and profile failover."""
-        client, profile_id, err_resp = await cls.resolve_client(strategy, request, session_data)
-        if err_resp or not client:
-            return err_resp or JSONResponse(
-                {"error": {"message": "Client not initialized.", "type": "server_error", "code": "upstream_error"}},
-                status_code=500,
-            )
-
-        if profile_id:
-            asyncio.create_task(asyncio.to_thread(record_profile_request, profile_id))
-
         provider_name = strategy.provider_name
+        active_profiles = load_balancer.get_active_profiles(provider_name)
+        max_profile_attempts = max(1, len(active_profiles))
 
         raw_prompt = extract_text(messages[-1].get("content") if isinstance(messages[-1], dict) else messages[-1].content) if messages else ""
         sync_and_get_history(messages, session_data)
         history = session_data.get("history", [])
 
-        for attempt in range(2):
-            has_session = cls._has_provider_session(provider_name, session_data) and attempt == 0
-            prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)
+        last_error_resp = None
 
-            # Build session kwargs
-            inject_kwargs = {"client": client}
-            if provider_name == "gemini":
-                inject_kwargs["chat_cls"] = ChatSession
-            session_kwargs = adapter.inject(session_data, inject_kwargs)
-
-            try:
-                content, thoughts = await strategy.execute_chat(client, prompt, model, session_kwargs)
-            except Exception as e:
-                err_str = str(e)
-                if strategy.is_retryable_error(err_str):
-                    logger.warning("Profile '%s' failed on request (%s). Deactivating profile...", profile_id, err_str)
-                    if profile_id:
-                        load_balancer.handle_profile_failure(profile_id, session_data)
-                        await strategy.handle_profile_cleanup(profile_id)
-
-                if attempt == 0 and cls._has_provider_session(provider_name, session_data):
-                    logger.warning("%s provider session error, resetting and retrying with prompt history...", provider_name)
-                    adapter.clear_provider_session(session_data)
-                    continue
-
-                logger.error("%s execution error: %s", provider_name, err_str)
-                return JSONResponse(
-                    {"error": {"message": err_str, "type": "server_error", "code": "upstream_error"}},
+        for p_attempt in range(max_profile_attempts):
+            client, profile_id, err_resp = await cls.resolve_client(strategy, request, session_data)
+            if err_resp or not client:
+                return err_resp or JSONResponse(
+                    {"error": {"message": "Client not initialized.", "type": "server_error", "code": "upstream_error"}},
                     status_code=500,
                 )
 
-            # Extract updated session state
-            if "chat" in session_kwargs:
-                session_data.update(adapter.extract(session_kwargs["chat"], session_data))
+            if profile_id:
+                asyncio.create_task(asyncio.to_thread(record_profile_request, profile_id))
 
-            append_assistant_message(session_data, content)
+            should_failover = False
 
-            response_data = {
-                "id": f"chatcmpl-{int(time.time())}",
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": model,
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {"role": "assistant", "content": content},
-                        "finish_reason": "stop",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": 0,
-                    "completion_tokens": len(content.split()) if content else 0,
-                    "total_tokens": len(content.split()) if content else 0,
-                },
-            }
+            for attempt in range(2):
+                has_session = cls._has_provider_session(provider_name, session_data) and attempt == 0
+                prompt = raw_prompt if has_session else format_prompt_with_history(history, raw_prompt)
 
-            if thoughts:
-                response_data["choices"][0]["message"]["reasoning_content"] = thoughts
+                # Build session kwargs
+                inject_kwargs = {"client": client}
+                if provider_name == "gemini":
+                    inject_kwargs["chat_cls"] = ChatSession
+                session_kwargs = adapter.inject(session_data, inject_kwargs)
 
-            return JSONResponse(response_data)
+                try:
+                    content, thoughts = await strategy.execute_chat(client, prompt, model, session_kwargs)
+                except Exception as e:
+                    err_str = str(e)
+                    if strategy.is_retryable_error(err_str):
+                        is_auth = load_balancer.is_auth_failure(err_str)
+                        logger.warning("Profile '%s' error (%s). is_permanent=%s", profile_id, err_str, is_auth)
+                        if profile_id:
+                            load_balancer.handle_profile_failure(profile_id, session_data, is_permanent=is_auth)
+                            await strategy.handle_profile_cleanup(profile_id)
+                        if p_attempt < max_profile_attempts - 1 and load_balancer.get_active_profiles(provider_name):
+                            should_failover = True
+                            break
 
-        return JSONResponse(
-            {"error": {"message": "Session failed after retry", "type": "server_error", "code": "upstream_error"}},
+                    if attempt == 0 and cls._has_provider_session(provider_name, session_data):
+                        logger.warning("%s provider session error, resetting and retrying with prompt history...", provider_name)
+                        adapter.clear_provider_session(session_data)
+                        continue
+
+                    logger.error("%s execution error: %s", provider_name, err_str)
+                    last_error_resp = JSONResponse(
+                        {"error": {"message": err_str, "type": "server_error", "code": "upstream_error"}},
+                        status_code=500,
+                    )
+                    break
+
+                # Extract updated session state
+                if "chat" in session_kwargs:
+                    session_data.update(adapter.extract(session_kwargs["chat"], session_data))
+
+                append_assistant_message(session_data, content)
+
+                response_data = {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": content},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 0,
+                        "completion_tokens": len(content.split()) if content else 0,
+                        "total_tokens": len(content.split()) if content else 0,
+                    },
+                }
+
+                if thoughts:
+                    response_data["choices"][0]["message"]["reasoning_content"] = thoughts
+
+                return JSONResponse(response_data)
+
+            if should_failover:
+                continue
+
+            if last_error_resp:
+                return last_error_resp
+
+        return last_error_resp or JSONResponse(
+            {"error": {"message": "All available profiles failed", "type": "server_error", "code": "upstream_error"}},
             status_code=500,
         )
 
@@ -224,9 +243,10 @@ class ChatExecutionService:
             except Exception as e:
                 err_str = str(e)
                 if strategy.is_retryable_error(err_str):
-                    logger.warning("Profile '%s' failed on stream (%s). Deactivating profile...", profile_id, err_str)
+                    is_auth = load_balancer.is_auth_failure(err_str)
+                    logger.warning("Profile '%s' failed on stream (%s). is_permanent=%s", profile_id, err_str, is_auth)
                     if profile_id:
-                        load_balancer.handle_profile_failure(profile_id, session_data)
+                        load_balancer.handle_profile_failure(profile_id, session_data, is_permanent=is_auth)
                         await strategy.handle_profile_cleanup(profile_id)
                 logger.error("%s stream execution error: %s", provider_name, err_str)
                 yield make_error_chunk(err_str)
@@ -237,6 +257,7 @@ class ChatExecutionService:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
+
 
 
 chat_service = ChatExecutionService()
