@@ -131,3 +131,50 @@ def test_api_key_lifecycle():
     assert revoke_api_key(key) is True
     assert validate_api_key(key) is False
 
+
+def test_concurrent_writes_and_dashboard_reads():
+    """Simulate heavy simultaneous background writes (sessions/stats) and dashboard reads."""
+    import concurrent.futures
+
+    # Setup a profile and key
+    p = create_profile(profile_type="gemini", name="Concurrent Gemini", cookie="cookie123")
+    key = generate_api_key(name="Load Key")
+    store = VirtualSessionStore()
+
+    errors = []
+
+    def writer_task(i):
+        try:
+            vid = f"concurrent-sess-{i}"
+            store.get_or_create(vid, api_key_hash="hash")
+            store.save_data(vid, {"history": [{"role": "user", "content": f"msg {i}"}]})
+            record_profile_request(p["id"])
+            validate_api_key(key)
+        except Exception as e:
+            errors.append(f"Writer error: {e}")
+
+    def reader_task():
+        try:
+            start = time.time()
+            profiles = list_profiles()
+            keys = list_api_keys()
+            elapsed = time.time() - start
+            assert len(profiles) >= 1
+            assert len(keys) >= 1
+            # Reading dashboard should be sub-50ms and never blocked
+            assert elapsed < 0.2
+        except Exception as e:
+            errors.append(f"Reader error: {e}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        # Launch 20 writers and 20 readers concurrently
+        futures = []
+        for i in range(20):
+            futures.append(executor.submit(writer_task, i))
+            futures.append(executor.submit(reader_task))
+        for f in concurrent.futures.as_completed(futures):
+            f.result()
+
+    assert len(errors) == 0, f"Encountered concurrency errors: {errors}"
+
+

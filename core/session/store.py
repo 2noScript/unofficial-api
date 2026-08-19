@@ -28,14 +28,13 @@ class SessionRecord:
 class VirtualSessionStore:
     def __init__(self):
         init_db()
-        self._lock = threading.RLock()
         self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         self._cleanup_thread.start()
 
     # ── public API ────────────────────────────────────────────────────────────
 
     def get_or_create(self, vid: str, api_key_hash: str | None = None) -> SessionRecord:
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             now = time.time()
             cur = conn.cursor()
             cur.execute(
@@ -75,7 +74,7 @@ class VirtualSessionStore:
             return rec
 
     def get(self, vid: str) -> SessionRecord | None:
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             now = time.time()
             cur = conn.cursor()
             cur.execute(
@@ -103,7 +102,7 @@ class VirtualSessionStore:
 
     def save_data(self, vid: str, data: dict, api_key_hash: str | None = None):
         """Persist session data dictionary to SQLite."""
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             now = time.time()
             data_json = json.dumps(data, ensure_ascii=False)
             if api_key_hash is not None:
@@ -131,7 +130,7 @@ class VirtualSessionStore:
                 )
 
     def update(self, vid: str, **fields):
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute("SELECT data, api_key_hash FROM sessions WHERE session_id = ?", (vid,))
             row = cur.fetchone()
@@ -149,7 +148,7 @@ class VirtualSessionStore:
             )
 
     def set_assistant(self, hash_key: str, vid: str):
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             now = time.time()
             conn.execute(
                 """
@@ -177,7 +176,7 @@ class VirtualSessionStore:
                 )
 
     def get_assistant(self, hash_key: str) -> str | None:
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute("SELECT session_id FROM assistant_cache WHERE hash_key = ?", (hash_key,))
             row = cur.fetchone()
@@ -188,7 +187,7 @@ class VirtualSessionStore:
             return None
 
     def get_sessions_by_api_key(self, api_key_hash: str) -> list[SessionRecord]:
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute(
                 "SELECT session_id, data, last_used, api_key_hash FROM sessions WHERE api_key_hash = ?",
@@ -212,7 +211,7 @@ class VirtualSessionStore:
         if TTL_S == float('inf'):
             return  # never expire mode
         now = time.time()
-        with self._lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute(
                 "SELECT COUNT(*) AS cnt FROM sessions WHERE (? - last_used) > ?",

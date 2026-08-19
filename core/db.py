@@ -4,12 +4,13 @@ import sqlite3
 import logging
 import threading
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Set
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 _db_lock = threading.RLock()
+_initialized_dbs: Set[str] = set()
 
 
 def get_data_dir() -> Path:
@@ -24,8 +25,12 @@ def get_db_path() -> Path:
 
 @contextmanager
 def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
-    """Context manager for SQLite connections with WAL mode and row factory."""
+    """Context manager for SQLite connections with row factory and connection-level PRAGMAs."""
     db_path = get_db_path()
+    # Ensure initialized
+    if str(db_path) not in _initialized_dbs:
+        init_db()
+
     conn = sqlite3.connect(
         db_path,
         timeout=15.0,
@@ -34,8 +39,6 @@ def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
     )
     conn.row_factory = sqlite3.Row
     try:
-        # Configure PRAGMAs
-        conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA busy_timeout = 5000;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         conn.execute("PRAGMA foreign_keys = ON;")
@@ -44,11 +47,32 @@ def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
         conn.close()
 
 
-def init_db():
-    """Create tables and indexes if they do not exist."""
-    with _db_lock, get_db_connection() as conn:
-        conn.execute("BEGIN;")
+def init_db(force: bool = False):
+    """Create tables and indexes if they do not exist (runs once per db path)."""
+    db_path = get_db_path()
+    path_key = str(db_path.resolve())
+
+    if path_key in _initialized_dbs and not force:
+        return
+
+    with _db_lock:
+        if path_key in _initialized_dbs and not force:
+            return
+
+        conn = sqlite3.connect(
+            db_path,
+            timeout=15.0,
+            check_same_thread=False,
+            isolation_level=None
+        )
         try:
+            # Enable WAL mode once on initialization
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA busy_timeout = 5000;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
+            conn.execute("PRAGMA foreign_keys = ON;")
+
+            conn.execute("BEGIN;")
             # 1. Sessions table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -110,7 +134,10 @@ def init_db():
             """)
 
             conn.execute("COMMIT;")
-            logger.info("SQLite database initialized at %s", get_db_path())
+            _initialized_dbs.add(path_key)
+            logger.info("SQLite database initialized at %s (WAL mode)", db_path)
         except Exception:
             conn.execute("ROLLBACK;")
             raise
+        finally:
+            conn.close()

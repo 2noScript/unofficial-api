@@ -3,13 +3,10 @@ import json
 import uuid
 import time
 import logging
-import threading
 from datetime import datetime
-from core.db import get_db_connection, init_db
+from core.db import get_db_connection
 
 logger = logging.getLogger(__name__)
-
-_profiles_lock = threading.RLock()
 
 
 def _normalize_profile_stats(profile: dict) -> dict:
@@ -48,8 +45,7 @@ def create_profile(
     cookie: str | None = None,
     is_active: bool = True
 ) -> dict:
-    init_db()
-    with _profiles_lock, get_db_connection() as conn:
+    with get_db_connection() as conn:
         profile_id = f"prof_{profile_type}_{uuid.uuid4().hex[:8]}"
         now = time.strftime('%Y-%m-%dT%H:%M:%S')
 
@@ -89,8 +85,8 @@ def create_profile(
 
 
 def list_profiles(profile_type: str | None = None) -> list[dict]:
-    init_db()
-    with _profiles_lock, get_db_connection() as conn:
+    """Concurrent non-blocking read of profiles."""
+    with get_db_connection() as conn:
         cur = conn.cursor()
         if profile_type:
             cur.execute("SELECT * FROM profiles WHERE type = ?", (profile_type,))
@@ -101,8 +97,8 @@ def list_profiles(profile_type: str | None = None) -> list[dict]:
 
 
 def get_profile(profile_id: str) -> dict | None:
-    init_db()
-    with _profiles_lock, get_db_connection() as conn:
+    """Concurrent non-blocking lookup of single profile."""
+    with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT * FROM profiles WHERE id = ?", (profile_id,))
         row = cur.fetchone()
@@ -118,12 +114,14 @@ def update_profile(
     cookie: str | None = None,
     is_active: bool | None = None
 ) -> dict | None:
-    init_db()
-    with _profiles_lock, get_db_connection() as conn:
-        profile = get_profile(profile_id)
-        if not profile:
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM profiles WHERE id = ?", (profile_id,))
+        row = cur.fetchone()
+        if not row:
             return None
 
+        profile = _row_to_profile(row)
         ptype = profile.get("type")
         new_name = name if name is not None else profile["name"]
         new_is_active = is_active if is_active is not None else profile["is_active"]
@@ -154,8 +152,7 @@ def update_profile(
 
 
 def delete_profile(profile_id: str) -> bool:
-    init_db()
-    with _profiles_lock, get_db_connection() as conn:
+    with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT id FROM profiles WHERE id = ?", (profile_id,))
         if not cur.fetchone():
@@ -174,12 +171,14 @@ def deactivate_profile(profile_id: str) -> dict | None:
 
 def record_profile_request(profile_id: str, timestamp: datetime | None = None) -> dict | None:
     """Increment request count for profile grouped by YYYY-MM-DD and HH."""
-    init_db()
-    with _profiles_lock, get_db_connection() as conn:
-        profile = get_profile(profile_id)
-        if not profile:
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM profiles WHERE id = ?", (profile_id,))
+        row = cur.fetchone()
+        if not row:
             return None
 
+        profile = _row_to_profile(row)
         dt = timestamp if timestamp is not None else datetime.now()
         day_key = dt.strftime("%Y-%m-%d")
         hour_key = dt.strftime("%H")
@@ -210,4 +209,7 @@ def record_profile_request(profile_id: str, timestamp: datetime | None = None) -
             "Recorded request for profile %s (%s %s:00 total=%d count=%d)",
             profile_id, day_key, hour_key, total_requests, request_counts[day_key][hour_key]
         )
-        return get_profile(profile_id)
+        profile["total_requests"] = total_requests
+        profile["request_counts"] = request_counts
+        profile["updated_at"] = now
+        return profile

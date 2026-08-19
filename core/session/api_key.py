@@ -6,61 +6,71 @@ import secrets
 import logging
 import time
 import threading
-from core.db import get_db_connection, init_db, get_data_dir
+from core.db import get_db_connection, get_data_dir
 
 logger = logging.getLogger(__name__)
-_keys_lock = threading.RLock()
+_mid_lock = threading.RLock()
 
 API_KEY_PREFIX = 'sk'
 API_KEY_SECRET = os.environ.get('API_KEY_SECRET', 'unofficial-api-key-secret')
+_cached_machine_ids: dict[str, str] = {}
 
 
 def _get_machine_id() -> str:
-    init_db()
-    with _keys_lock, get_db_connection() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT value FROM system_settings WHERE key = 'machine_id'")
-        row = cur.fetchone()
-        if row and row["value"]:
-            return row["value"]
+    db_key = str(get_data_dir().resolve())
+    if db_key in _cached_machine_ids:
+        return _cached_machine_ids[db_key]
 
-        # Check fallback file in data dir
-        mid_file = get_data_dir() / 'machine_id'
-        if mid_file.exists():
+    with _mid_lock:
+        if db_key in _cached_machine_ids:
+            return _cached_machine_ids[db_key]
+
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT value FROM system_settings WHERE key = 'machine_id'")
+            row = cur.fetchone()
+            if row and row["value"]:
+                _cached_machine_ids[db_key] = row["value"]
+                return row["value"]
+
+            # Check fallback file in data dir
+            mid_file = get_data_dir() / 'machine_id'
+            if mid_file.exists():
+                try:
+                    mid_text = mid_file.read_text().strip()
+                    if mid_text:
+                        conn.execute(
+                            "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('machine_id', ?)",
+                            (mid_text,)
+                        )
+                        _cached_machine_ids[db_key] = mid_text
+                        return mid_text
+                except Exception:
+                    pass
+
+            # Generate new machine ID
+            raw = f"{secrets.token_hex(16)}-{time.time()}"
+            machine_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
+            conn.execute(
+                "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('machine_id', ?)",
+                (machine_id,)
+            )
             try:
-                mid_text = mid_file.read_text().strip()
-                if mid_text:
-                    conn.execute(
-                        "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('machine_id', ?)",
-                        (mid_text,)
-                    )
-                    return mid_text
+                mid_file.write_text(machine_id)
             except Exception:
                 pass
-
-        # Generate new machine ID
-        raw = f"{secrets.token_hex(16)}-{time.time()}"
-        machine_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
-        conn.execute(
-            "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('machine_id', ?)",
-            (machine_id,)
-        )
-        try:
-            mid_file.write_text(machine_id)
-        except Exception:
-            pass
-        return machine_id
+            _cached_machine_ids[db_key] = machine_id
+            return machine_id
 
 
 def generate_api_key(name: str = '') -> str:
-    init_db()
-    with _keys_lock, get_db_connection() as conn:
-        machine_id = _get_machine_id()
-        key_id = secrets.token_hex(3)
-        raw = f"{machine_id[:8]}{key_id}"
-        crc = hmac.new(API_KEY_SECRET.encode(), raw.encode(), 'sha256').hexdigest()[:8]
-        api_key = f"{API_KEY_PREFIX}-{machine_id[:8]}-{key_id}-{crc}"
+    machine_id = _get_machine_id()
+    key_id = secrets.token_hex(3)
+    raw = f"{machine_id[:8]}{key_id}"
+    crc = hmac.new(API_KEY_SECRET.encode(), raw.encode(), 'sha256').hexdigest()[:8]
+    api_key = f"{API_KEY_PREFIX}-{machine_id[:8]}-{key_id}-{crc}"
 
+    with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT COUNT(*) AS cnt FROM api_keys")
         count = cur.fetchone()["cnt"]
@@ -92,8 +102,7 @@ def validate_api_key(api_key: str) -> bool:
             logger.debug('Invalid API key prefix: %s', prefix)
             return False
 
-        init_db()
-        with _keys_lock, get_db_connection() as conn:
+        with get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute("SELECT key, name, is_active FROM api_keys WHERE key = ?", (api_key,))
             row = cur.fetchone()
@@ -126,8 +135,7 @@ def validate_api_key(api_key: str) -> bool:
 
 
 def list_api_keys() -> list[dict]:
-    init_db()
-    with _keys_lock, get_db_connection() as conn:
+    with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT key, name, is_active, created_at, last_used FROM api_keys")
         result = []
@@ -143,8 +151,7 @@ def list_api_keys() -> list[dict]:
 
 
 def get_api_key(api_key: str) -> dict | None:
-    init_db()
-    with _keys_lock, get_db_connection() as conn:
+    with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT key, name, is_active, created_at, last_used FROM api_keys WHERE key = ?", (api_key,))
         row = cur.fetchone()
@@ -160,9 +167,7 @@ def get_api_key(api_key: str) -> dict | None:
 
 
 def revoke_api_key(api_key: str) -> bool:
-
-    init_db()
-    with _keys_lock, get_db_connection() as conn:
+    with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT key FROM api_keys WHERE key = ?", (api_key,))
         if not cur.fetchone():
