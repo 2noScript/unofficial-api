@@ -2,6 +2,7 @@ import time
 import uuid
 import logging
 import threading
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,21 @@ class VirtualSessionManager:
     def __init__(self, store):
         self.store = store
         self._runtime_sessions = {}  # key (seed/connectionId) -> (session_id, last_used)
+        self._session_locks: dict[str, asyncio.Lock] = {}
         self._lock = threading.Lock()
+
+    def get_lock(self, session_id: str) -> asyncio.Lock:
+        with self._lock:
+            # Clean up old unlocked locks if cache exceeds cap
+            if len(self._session_locks) >= 2000:
+                unlocked = [k for k, lock in self._session_locks.items() if not lock.locked()]
+                for k in unlocked[:500]:
+                    self._session_locks.pop(k, None)
+
+            if session_id not in self._session_locks:
+                self._session_locks[session_id] = asyncio.Lock()
+            return self._session_locks[session_id]
+
 
     def resolve(self, headers: dict, body: dict, provider: str, api_key_hash: str | None = None, fingerprint: str | None = None) -> str:
         for key in RESERVED_HEADERS:

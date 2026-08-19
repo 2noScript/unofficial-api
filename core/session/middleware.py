@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import asyncio
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from .store import VirtualSessionStore
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 CHAT_PATHS = {'/chat/completions'}
 
-async def session_saving_generator(iterator, store: VirtualSessionStore, vid: str, session_data: dict, api_key_hash: str | None):
+async def session_saving_generator(iterator, store: VirtualSessionStore, vid: str, session_data: dict, api_key_hash: str | None, lock: asyncio.Lock | None = None):
     try:
         async for chunk in iterator:
             yield chunk
@@ -22,6 +23,9 @@ async def session_saving_generator(iterator, store: VirtualSessionStore, vid: st
             store.save_data(vid, session_data, api_key_hash)
         except Exception as e:
             logger.error("Failed to save session to SQLite in streaming middleware: %s", e)
+        finally:
+            if lock and lock.locked():
+                lock.release()
 
 
 class VirtualSessionMiddleware:
@@ -111,42 +115,51 @@ class VirtualSessionMiddleware:
             logger.error('Session resolution error: %s', e)
             vid = self.manager._derive_session_id(api_key_hash or fingerprint or 'error')
             
+        session_lock = self.manager.get_lock(vid)
+        await session_lock.acquire()
+        lock_released = False
         try:
-            session_record = self.store.get_or_create(vid, api_key_hash=api_key_hash)
-            request.state.virtual_session_id = vid
-            request.state.session_data = session_record.data
-        except Exception as e:
-            logger.error("Failed to retrieve or create session record: %s", e)
-            request.state.virtual_session_id = vid
-            request.state.session_data = {}
-        
-        try:
-            response = await call_next(request)
-        except Exception as e:
-            logger.error("Unhandled exception processing request %s: %s", path, e, exc_info=True)
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": {
-                        "message": f"Internal server error: {str(e)}",
-                        "type": "api_error",
-                        "code": "internal_error"
-                    }
-                }
-            )
-
-        response.headers['X-Session-Id'] = vid
-        
-        # Automatically save session to SQLite on completion
-        session_data = getattr(request.state, "session_data", {})
-        if hasattr(response, 'body_iterator'):
-            response.body_iterator = session_saving_generator(
-                response.body_iterator, self.store, vid, session_data, api_key_hash
-            )
-        else:
             try:
-                self.store.save_data(vid, session_data, api_key_hash)
+                session_record = self.store.get_or_create(vid, api_key_hash=api_key_hash)
+                request.state.virtual_session_id = vid
+                request.state.session_data = session_record.data
             except Exception as e:
-                logger.error("Failed to save session to SQLite: %s", e)
-                
-        return response
+                logger.error("Failed to retrieve or create session record: %s", e)
+                request.state.virtual_session_id = vid
+                request.state.session_data = {}
+            
+            try:
+                response = await call_next(request)
+            except Exception as e:
+                logger.error("Unhandled exception processing request %s: %s", path, e, exc_info=True)
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "error": {
+                            "message": f"Internal server error: {str(e)}",
+                            "type": "api_error",
+                            "code": "internal_error"
+                        }
+                    }
+                )
+
+            response.headers['X-Session-Id'] = vid
+            
+            # Automatically save session to SQLite on completion
+            session_data = getattr(request.state, "session_data", {})
+            if hasattr(response, 'body_iterator'):
+                response.body_iterator = session_saving_generator(
+                    response.body_iterator, self.store, vid, session_data, api_key_hash, lock=session_lock
+                )
+                lock_released = True
+            else:
+                try:
+                    self.store.save_data(vid, session_data, api_key_hash)
+                except Exception as e:
+                    logger.error("Failed to save session to SQLite: %s", e)
+                    
+            return response
+        finally:
+            if not lock_released and session_lock.locked():
+                session_lock.release()
+
