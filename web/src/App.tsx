@@ -640,8 +640,9 @@ export function App() {
                         </TableCell>
 
                         <TableCell className="text-xs text-muted-foreground">
-                          {p.updated_at ? new Date(p.updated_at).toLocaleString() : "N/A"}
+                          {p.updated_at ? new Date(p.updated_at).toLocaleString("en-US") : "N/A"}
                         </TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             <Button
@@ -717,6 +718,7 @@ export function App() {
       </main>
 
       {/* View Request Statistics Modal */}
+      {/* View Profile Request Stats Modal */}
       {viewStatsProfile && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <Card className="max-w-lg w-full max-h-[85vh] flex flex-col p-2">
@@ -724,19 +726,19 @@ export function App() {
               <div>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Activity className="w-5 h-5 text-primary" />
-                  Thống kê Request
+                  Request Statistics
                 </CardTitle>
                 <CardDescription className="text-xs font-mono mt-0.5">{viewStatsProfile.name} ({viewStatsProfile.id})</CardDescription>
               </div>
               <Badge variant="secondary" className="font-mono text-xs px-2.5 py-1">
-                Tổng: {viewStatsProfile.total_requests || 0}
+                Total: {viewStatsProfile.total_requests || 0}
               </Badge>
             </CardHeader>
             <CardContent className="overflow-y-auto space-y-4 pt-4 flex-1">
               {(!viewStatsProfile.request_counts || Object.keys(viewStatsProfile.request_counts).length === 0) ? (
                 <div className="text-center py-8">
                   <Activity className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
-                  <p className="text-sm text-muted-foreground">Chưa có dữ liệu request cho profile này.</p>
+                  <p className="text-sm text-muted-foreground">No request statistics recorded for this profile yet.</p>
                 </div>
               ) : (
                 Object.entries(viewStatsProfile.request_counts)
@@ -746,8 +748,8 @@ export function App() {
                     return (
                       <div key={date} className="border border-border/80 rounded-xl p-3 bg-muted/20 space-y-2">
                         <div className="flex items-center justify-between font-semibold text-xs text-foreground border-b border-border/40 pb-2">
-                          <span>📅 Ngày {date}</span>
-                          <Badge variant="outline" className="text-[11px] font-mono">Lượt gọi ngày: {dayTotal}</Badge>
+                          <span>📅 Date: {date}</span>
+                          <Badge variant="outline" className="text-[11px] font-mono">Daily Calls: {dayTotal}</Badge>
                         </div>
                         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
                           {Object.entries(hours)
@@ -766,7 +768,7 @@ export function App() {
             </CardContent>
             <div className="flex justify-end pt-3 pb-1 px-4 border-t border-border/40">
               <Button variant="outline" size="sm" onClick={() => setViewStatsProfile(null)}>
-                Đóng
+                Close
               </Button>
             </div>
           </Card>
@@ -782,27 +784,28 @@ export function App() {
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <CardTitle className="text-lg">Xác nhận xoá Profile</CardTitle>
-                <CardDescription>Hành động này không thể hoàn tác</CardDescription>
+                <CardTitle className="text-lg">Confirm Delete Profile</CardTitle>
+                <CardDescription>This action cannot be undone</CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-foreground">
-                Bạn có chắc chắn muốn xoá Profile <strong className="text-foreground">{deletingProfile.name}</strong> (<code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{deletingProfile.id}</code>) không?
+                Are you sure you want to delete profile <strong className="text-foreground">{deletingProfile.name}</strong> (<code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{deletingProfile.id}</code>)?
               </p>
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <Button type="button" variant="ghost" onClick={() => setDeletingProfile(null)}>
-                  Hủy bỏ
+                  Cancel
                 </Button>
                 <Button variant="destructive" onClick={confirmDeleteProfile}>
-                  Xoá Profile
+                  Delete Profile
                 </Button>
               </div>
             </CardContent>
           </Card>
         </div>
       )}
+
 
       {/* Add Profile Modal */}
       {showAddProfileModal && (
