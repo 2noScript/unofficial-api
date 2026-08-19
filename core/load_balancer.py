@@ -87,15 +87,26 @@ class ProfileLoadBalancer:
 
     @staticmethod
     def is_auth_failure(err: str | Exception) -> bool:
-        """Check if an error is a permanent credential/auth failure."""
+        """
+        Check if an error is a permanent credential/auth failure (e.g. 401 Unauthorized / dead token).
+        Never deactivates for transient/session/bot/rate-limit errors.
+        """
         import re
         msg = str(err).lower()
-        if "session is not authenticated" in msg:
+        non_auth_keywords = (
+            "session is not authenticated", "40300", "missing_header", 
+            "being generated", "please try again later", "too frequent", 
+            "rate limit", "too many requests", "challenge", "pow"
+        )
+        if any(kw in msg for kw in non_auth_keywords):
             return False
-        auth_keywords = ("unauthorized", "unauthenticated", "invalid cookie", "invalid token", "expired token", "token expired")
+
+        auth_keywords = ("unauthorized", "unauthenticated", "invalid token", "expired token", "token expired", "invalid cookie")
         if any(kw in msg for kw in auth_keywords):
             return True
-        return bool(re.search(r'\b(401|403|40300)\b', msg))
+
+        return bool(re.search(r'\b401\b', msg))
+
 
     @staticmethod
     def is_retryable_error(err: str | Exception) -> bool:
@@ -111,12 +122,14 @@ class ProfileLoadBalancer:
 
         text_keywords = (
             "unauthorized", "unauthenticated", "forbidden", "expired",
-            "invalid cookie", "invalid token", "rate limit", "too many requests"
+            "invalid cookie", "invalid token", "rate limit", "too many requests",
+            "40300", "missing_header", "being generated", "please try again later"
         )
         if any(kw in msg for kw in text_keywords):
             return True
 
         return bool(re.search(r'\b(401|403|429|40300)\b', msg))
+
 
 
 load_balancer = ProfileLoadBalancer()
