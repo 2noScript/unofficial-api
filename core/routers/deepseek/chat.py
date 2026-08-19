@@ -55,10 +55,9 @@ async def chat_completions(
             status_code=400,
         )
 
-    logger.info("Request /v1/deepseek/chat/completions: %s", body.model_dump_json())
-
     # Session integration
     adapter = get_adapter("deepseek")
+
     session_data = getattr(request.state, "session_data", {})
 
     # Sync local history with incoming messages

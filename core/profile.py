@@ -205,11 +205,12 @@ def record_profile_request(profile_id: str, timestamp: datetime | None = None) -
             """,
             (total_requests, json.dumps(request_counts), now, profile_id)
         )
-        logger.info(
+        logger.debug(
             "Recorded request for profile %s (%s %s:00 total=%d count=%d)",
             profile_id, day_key, hour_key, total_requests, request_counts[day_key][hour_key]
         )
         profile["total_requests"] = total_requests
+
         profile["request_counts"] = request_counts
         profile["updated_at"] = now
         return profile

@@ -51,9 +51,8 @@ async def chat_completions(
             status_code=400,
         )
 
-    logger.info("Request /v1/gemini/chat/completions: %s", body.model_dump_json())
-
     adapter = get_adapter("gemini")
+
     sync_and_get_history(messages, session_data)
 
     if stream:
