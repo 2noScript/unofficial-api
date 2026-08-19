@@ -5,7 +5,8 @@ import tempfile
 from pathlib import Path
 import pytest
 
-from core.db import init_db, auto_migrate_from_json, get_db_connection, get_db_path
+from core.db import init_db, get_db_connection, get_db_path
+
 from core.session.store import VirtualSessionStore, SessionRecord
 from core.profile import (
     create_profile,
@@ -130,77 +131,3 @@ def test_api_key_lifecycle():
     assert revoke_api_key(key) is True
     assert validate_api_key(key) is False
 
-
-def test_auto_migration(tmp_path, monkeypatch):
-    mig_dir = tmp_path / "mig_data"
-    mig_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setenv("UNOFFICIAL_API_DATA_DIR", str(mig_dir))
-
-    # Create legacy JSON files
-    sessions_json = mig_dir / "sessions.json"
-    sessions_json.write_text(json.dumps({
-        "sessions": {
-            "legacy-sess-1": {
-                "data": {"history": [{"role": "user", "content": "legacy"}]},
-                "last_used": 1700000000.0,
-                "api_key_hash": "legacyhash"
-            }
-        },
-        "assistant_cache": {
-            "legacy-prompt-hash": "legacy-sess-1"
-        }
-    }))
-
-    profiles_json = mig_dir / "profiles.json"
-    profiles_json.write_text(json.dumps({
-        "profiles": {
-            "prof_legacy_1": {
-                "id": "prof_legacy_1",
-                "type": "gemini",
-                "name": "Legacy Gemini",
-                "cookie": "test-cookie",
-                "is_active": True,
-                "total_requests": 5,
-                "request_counts": {"2026-08-19": {"06": 5}},
-                "created_at": "2026-08-19T06:00:00",
-                "updated_at": "2026-08-19T06:00:00"
-            }
-        }
-    }))
-
-    api_keys_json = mig_dir / "api_keys.json"
-    api_keys_json.write_text(json.dumps({
-        "machine_id": "legacy-mid-1234",
-        "keys": {
-            "sk-legacy-1": {
-                "name": "Legacy Key",
-                "created_at": "2026-08-19T06:00:00",
-                "is_active": True
-            }
-        },
-        "last_used": {
-            "sk-legacy-1": "2026-08-19T06:30:00"
-        }
-    }))
-
-    # Trigger auto-migration
-    auto_migrate_from_json()
-
-    # Verify sessions migrated
-    store = VirtualSessionStore()
-    s = store.get("legacy-sess-1")
-    assert s is not None
-    assert s.data["history"][0]["content"] == "legacy"
-    assert store.get_assistant("legacy-prompt-hash") == "legacy-sess-1"
-
-    # Verify profile migrated
-    p = get_profile("prof_legacy_1")
-    assert p is not None
-    assert p["name"] == "Legacy Gemini"
-    assert p["cookie"] == "test-cookie"
-    assert p["total_requests"] == 5
-
-    # Verify keys migrated
-    keys = list_api_keys()
-    assert any(k["key"] == "sk-legacy-1" and k["name"] == "Legacy Key" for k in keys)
-    assert _get_machine_id() == "legacy-mid-1234"
